@@ -11,9 +11,9 @@ setuptools.setup(
     description="This package is built on top of bing-image-downloader by gaurav singh",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/KTS-o7/better-bing-image-downloader",
+    url="https://github.com/KTS-o7/better_bing_image_downloader",
     keywords=['bing', 'images', 'scraping', 'image download', 'bulk image downloader',],
-    packages=['better-bing-image-downloader'],
+    packages=['better_bing_image_downloader'],
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
