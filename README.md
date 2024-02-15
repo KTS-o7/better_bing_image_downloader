@@ -1,1 +1,1 @@
-# better-bing-image-downloader
+# better_bing_image_downloader

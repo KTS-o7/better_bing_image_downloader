@@ -4,15 +4,13 @@ from pathlib import Path
 import argparse
 import logging
 
-
 try:
     from bing import Bing
 except ImportError:  # Python 3
     from .bing import Bing
 
-
 def download(query, limit=100, output_dir='dataset', adult_filter_off=True, 
-force_replace=False, timeout=60, filter="", verbose=True):
+force_replace=False, timeout=60, filter="", verbose=True, badsites= []):
     """
     Download images using the Bing image scraper.
     
@@ -47,9 +45,8 @@ force_replace=False, timeout=60, filter="", verbose=True):
         sys.exit(1)
         
     logging.info("Downloading Images to %s", str(image_dir.absolute()))
-    bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose)
+    bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose, badsites)
     bing.run()
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download images using Bing.')
@@ -61,7 +58,8 @@ if __name__ == '__main__':
     parser.add_argument('-t','--timeout', type=int, default=60, help='The timeout for the image download.')
     parser.add_argument('--filter', type=str, default="", help='The filter to apply to the search results.')
     parser.add_argument('-v','--verbose', action='store_true', help='Whether to print detailed output.')
+    parser.add_argument('-b','--bad-sites', nargs='*', default=[], help='List of bad sites to be excluded.')
     args = parser.parse_args()
     
     download(args.query, args.limit, args.output_dir, args.adult_filter_off, 
-    args.force_replace, args.timeout, args.filter, args.verbose)
+    args.force_replace, args.timeout, args.filter, args.verbose, args.bad_sites)

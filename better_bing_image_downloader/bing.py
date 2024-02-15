@@ -15,7 +15,7 @@ Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com)
 
 
 class Bing:
-    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True):
+    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True,badsites=[]):
         self.download_count = 0
         self.query = query
         self.output_dir = output_dir
@@ -24,6 +24,10 @@ class Bing:
         self.verbose = verbose
         self.seen = set()
         self.urls = []
+        self.badsites = badsites
+        
+        if self.badsites:
+            logging.info("Download links will not include: %s", ', '.join(self.badsites))
 
         assert type(limit) == int, "limit must be integer"
         self.limit = limit
@@ -97,7 +101,7 @@ class Bing:
     def run(self):
         while self.download_count < self.limit:
             if self.verbose:
-                logging.info('\n\n[!!]Indexing page: %d\n', self.page_counter + 1)
+                logging.info('\n\n[!]Indexing page: %d\n', self.page_counter + 1)
             # Parse the page source and download pics
             try:
                 request_url = (
@@ -120,6 +124,17 @@ class Bing:
                     logging.info("\n===============================================\n")
 
                 for link in links:
+                    
+                    isbadsite = False
+                    for badsite in self.badsites:
+                        isbadsite = badsite in link
+                        if isbadsite:
+                            if self.verbose:
+                                logging.info("[!] Link included in badsites %s %s", badsite, link)
+                                break
+                    if isbadsite:
+                        continue
+                                
                     if self.download_count < self.limit and link not in self.seen:
                         self.seen.add(link)
                         self.download_image(link)

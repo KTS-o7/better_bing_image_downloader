@@ -8,7 +8,7 @@ setuptools.setup(
     version="1.0.0",
     author="Krishnatejaswi S",
     author_email="shentharkrishnatejaswi@gmail.com",
-    description="A short description of your package",
+    description="This package is built on top of bing-image-downloader by gaurav singh",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/KTS-o7/better-bing-image-downloader",
