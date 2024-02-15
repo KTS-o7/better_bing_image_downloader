@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="better-bing-image-downloader",
+    name="better_bing_image_downloader",
     version="1.0.0",
     author="Krishnatejaswi S",
     author_email="shentharkrishnatejaswi@gmail.com",
