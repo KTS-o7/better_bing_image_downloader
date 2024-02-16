@@ -73,7 +73,7 @@ class Bing:
         return : None
         
     """
-    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True,badsites=[]):
+    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True,badsites=[], name='Image'):
         self.download_count = 0
         self.query = query
         self.output_dir = output_dir
@@ -83,6 +83,7 @@ class Bing:
         self.seen = set()
         self.urls = []
         self.badsites = badsites
+        self.image_name = name
         
         if self.badsites:
             logging.info("Download links will not include: %s", ', '.join(self.badsites))
@@ -118,7 +119,7 @@ class Bing:
             return ""
 
 
-    def save_image(self, link, file_path):
+    def save_image(self, link, file_path) -> None:
         try:
             request = urllib.request.Request(link, None, self.headers)
             image = urllib.request.urlopen(request, timeout=self.timeout).read()
@@ -147,8 +148,8 @@ class Bing:
                 # Download the image
                 print("[%] Downloading Image #{} from {}".format(self.download_count, link))
                 
-            self.save_image(link, self.output_dir.joinpath("Image_{}.{}".format(
-                str(self.download_count), file_type)))
+            self.save_image(link, self.output_dir.joinpath("{}_{}.{}".format(
+                self.image_name, str(self.download_count), file_type)))
             if self.verbose:
                 print("[%] File Downloaded !\n")
 
