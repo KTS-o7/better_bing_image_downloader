@@ -1,2 +1,2 @@
 from .bing import Bing
-from .download import download
+from .download import downloader

@@ -10,7 +10,7 @@ try:
 except ImportError:  # Python 3
     from .bing import Bing
 
-def download(query, limit=100, output_dir='dataset', adult_filter_off=True, 
+def downloader(query, limit=100, output_dir='dataset', adult_filter_off=True, 
 force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Image'):
     """
     Download images using the Bing image scraper.
@@ -66,5 +66,5 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--name', type=str, default='Image', help='The name of the images.')
     args = parser.parse_args()
     
-    download(args.query, args.limit, args.output_dir, args.adult_filter_off, 
+    downloader(args.query, args.limit, args.output_dir, args.adult_filter_off, 
     args.force_replace, args.timeout, args.filter, args.verbose, args.bad_sites, args.name)

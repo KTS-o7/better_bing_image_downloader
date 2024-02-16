@@ -5,7 +5,6 @@
 - [Disclaimer](#disclaimer)
 - [Installation](#installation)
 - [Usage](#usage)
-- [Requirements](#requirements)
 - [License](#license)
 - [Contact](#contact)
 
@@ -39,8 +38,10 @@ pip install better-bing-image-downloader
 ### Usage <br />
 
 ```python
-from better_bing_image_downloader import download
-download.download(query_string, limit=100,  output_dir='dataset', adult_filter_off=True, force_replace=False, timeout=60, verbose=True)
+from better_bing_image_downloader import downloader
+
+downloader(query_string, limit=100, output_dir='dataset', adult_filter_off=True,
+force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Image')
 ```
 
 `query_string` : String to be searched.<br />
@@ -52,6 +53,7 @@ download.download(query_string, limit=100,  output_dir='dataset', adult_filter_o
 `filter` : (optional, default is "") filter, choose from [line, photo, clipart, gif, transparent]<br />
 `verbose` : (optional, default is True) Enable downloaded message.<br />
 `bad-sites` : (optional, defualt is empty list) Can limit the query to not access the bad sites.<br/>
+`name` : (optional, default is 'Image') Can add a custom name for the images that are downloaded.<br/>
 
 ### License
 
