@@ -1,3 +1,4 @@
+from distutils import extension
 import os, sys
 import shutil
 from pathlib import Path
@@ -10,7 +11,7 @@ except ImportError:  # Python 3
     from .bing import Bing
 
 def download(query, limit=100, output_dir='dataset', adult_filter_off=True, 
-force_replace=False, timeout=60, filter="", verbose=True, badsites= []):
+force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Image'):
     """
     Download images using the Bing image scraper.
     
@@ -24,6 +25,7 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= []):
     filter (str): The filter to apply to the search results.
     verbose (bool): Whether to print detailed output._summary_
     badsites (list): List of bad sites to be excluded.
+    name (str): The name of the images.
     """
     # engine = 'bing'
     if adult_filter_off:
@@ -46,8 +48,9 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= []):
         sys.exit(1)
         
     logging.info("Downloading Images to %s", str(image_dir.absolute()))
-    bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose, badsites)
+    bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose, badsites, name)
     bing.run()
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Download images using Bing.')
@@ -60,7 +63,8 @@ if __name__ == '__main__':
     parser.add_argument('-f','--filter', type=str, default="", help='The filter to apply to the search results.')
     parser.add_argument('-v','--verbose', action='store_true', help='Whether to print detailed output.')
     parser.add_argument('-b','--bad-sites', nargs='*', default=[], help='List of bad sites to be excluded.')
+    parser.add_argument('-n', '--name', type=str, default='Image', help='The name of the images.')
     args = parser.parse_args()
     
     download(args.query, args.limit, args.output_dir, args.adult_filter_off, 
-    args.force_replace, args.timeout, args.filter, args.verbose, args.bad_sites)
+    args.force_replace, args.timeout, args.filter, args.verbose, args.bad_sites, args.name)
