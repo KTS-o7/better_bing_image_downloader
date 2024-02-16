@@ -119,8 +119,7 @@ class Bing:
             return ""
 
 
-    def save_image(self, link, file_path):
-        logging.info('Saving image %s', file_path)
+    def save_image(self, link, file_path) -> None:
         try:
             request = urllib.request.Request(link, None, self.headers)
             image = urllib.request.urlopen(request, timeout=self.timeout).read()
