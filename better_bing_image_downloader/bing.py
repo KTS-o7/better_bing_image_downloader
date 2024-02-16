@@ -15,6 +15,64 @@ Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com)
 
 
 class Bing:
+    """_summary_
+    A class to download images from Bing.
+    
+    _description_
+    This class is used to download images from Bing. It uses the Bing Image Search API to get the links of the images and then downloads the images from the links. The class can be used to download images based on a query, with a limit on the number of images to be downloaded. The images can be filtered based on the type of image (photo, clipart, line drawing, animated gif, transparent) and the adult content can be filtered as well. The images are saved in the specified output directory. The class also has the option to be verbose, which will print the progress of the download.
+    
+    _parameters_
+    
+    query : str
+        The query to be used to search for images.
+    limit : int
+        The number of images to be downloaded.
+    output_dir : str
+        The directory where the images are to be saved.
+    adult : str
+        The adult content filter. Can be "off" or "on".
+    timeout : int
+        The time in seconds to wait for the request to Bing to be completed.
+    filter : str
+        The type of image to be filtered. Can be "line", "photo", "clipart", "gif", "transparent".
+    verbose : bool
+        Whether to print the progress of the download.
+        
+    _methods_
+    
+    get_filter(shorthand)
+        Returns the filter string based on the shorthand.
+        ============
+        shorthand : str
+            The shorthand for the filter. Can be "line", "photo", "clipart", "gif", "transparent".
+        ============
+        return : str
+            The filter string based on the shorthand.
+            
+    save_image(link, file_path)
+        Saves the image from the link to the file path.
+        ============
+        link : str
+            The link of the image to be saved.
+        file_path : str
+            The file path where the image is to be saved.
+        ============
+        return : None
+        
+    download_image(link)
+        Downloads the image from the link.
+        ============
+        link : str
+            The link of the image to be downloaded.
+        ============
+        return : None
+
+    run()
+        Runs the download of the images.
+        ============
+        return : None
+        
+    """
     def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True,badsites=[]):
         self.download_count = 0
         self.query = query
