@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="better_bing_image_downloader",
-    version="1.0.2",
+    version="1.0.3",
     author="Krishnatejaswi S",
     author_email="shentharkrishnatejaswi@gmail.com",
     description="This package is built on top of bing-image-downloader by gaurav singh",
