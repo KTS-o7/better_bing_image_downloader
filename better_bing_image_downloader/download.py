@@ -22,7 +22,8 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= []):
     force_replace (bool): Whether to replace existing files.
     timeout (int): The timeout for the image download.
     filter (str): The filter to apply to the search results.
-    verbose (bool): Whether to print detailed output.
+    verbose (bool): Whether to print detailed output._summary_
+    badsites (list): List of bad sites to be excluded.
     """
     # engine = 'bing'
     if adult_filter_off:

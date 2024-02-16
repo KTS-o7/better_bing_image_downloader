@@ -1,5 +1,14 @@
 # Better Bing Image Downloader
 
+## Table of Contents
+
+- [Disclaimer](#disclaimer)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Requirements](#requirements)
+- [License](#license)
+- [Contact](#contact)
+
 ### Disclaimer<br />
 
 This program lets you download tons of images from Bing.
@@ -19,7 +28,7 @@ pip install .
 
 or
 
-```sh
+```bash
 pip install better-bing-image-downloader
 ```
 
@@ -34,7 +43,6 @@ from better_bing_image_downloader import download
 download.download(query_string, limit=100,  output_dir='dataset', adult_filter_off=True, force_replace=False, timeout=60, verbose=True)
 ```
 
-`-h` : Gives a verbose help on what to do<br/>
 `query_string` : String to be searched.<br />
 `limit` : (optional, default is 100) Number of images to download.<br />
 `output_dir` : (optional, default is 'dataset') Name of output dir.<br />
@@ -44,3 +52,11 @@ download.download(query_string, limit=100,  output_dir='dataset', adult_filter_o
 `filter` : (optional, default is "") filter, choose from [line, photo, clipart, gif, transparent]<br />
 `verbose` : (optional, default is True) Enable downloaded message.<br />
 `bad-sites` : (optional, defualt is empty list) Can limit the query to not access the bad sites.<br/>
+
+### License
+
+This project is licensed under the terms of the MIT license.
+
+### Contact
+
+If you have any questions or feedback, please contact us at [email](mailto:shentharkrishnatejaswi@gmail.com).
