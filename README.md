@@ -30,7 +30,7 @@ pip install better-bing-image-downloader
 ### Usage <br />
 
 ```python
-from bing_image_downloader import download
+from better_bing_image_downloader import download
 download.download(query_string, limit=100,  output_dir='dataset', adult_filter_off=True, force_replace=False, timeout=60, verbose=True)
 ```
 
