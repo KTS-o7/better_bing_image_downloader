@@ -1,17 +1,16 @@
-from distutils import extension
-import os, sys
+import os
+import sys
 import shutil
-from pathlib import Path
 import argparse
 import logging
+from pathlib import Path
+from bing import Bing
+from tqdm import tqdm
+from math import ceil
 
-try:
-    from bing import Bing
-except ImportError:  # Python 3
-    from .bing import Bing
 
-def downloader(query, limit=100, output_dir='dataset', adult_filter_off=True, 
-force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Image'):
+def downloader(query, limit=100, output_dir='dataset', adult_filter_off=True,
+            force_replace=False, timeout=60, filter="", verbose=True, badsites=[], name='Image'):
     """
     Download images using the Bing image scraper.
     
@@ -23,7 +22,7 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Im
     force_replace (bool): Whether to replace existing files.
     timeout (int): The timeout for the image download.
     filter (str): The filter to apply to the search results.
-    verbose (bool): Whether to print detailed output._summary_
+    verbose (bool): Whether to print detailed output.
     badsites (list): List of bad sites to be excluded.
     name (str): The name of the images.
     """
@@ -48,8 +47,16 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Im
         sys.exit(1)
         
     logging.info("Downloading Images to %s", str(image_dir.absolute()))
-    bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose, badsites, name)
-    bing.run()
+
+    # Initialize tqdm progress bar
+    with tqdm(total=limit, unit='MB', ncols=100, colour="green" ,bar_format='{l_bar}{bar} {total_fmt} MB| Download Speed {rate_fmt} | Estimated Time:  {remaining}') as pbar:
+        def update_progress_bar(download_count):
+            pbar.update(download_count - pbar.n)
+
+
+        bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose, badsites, name)
+        bing.download_callback = update_progress_bar
+        bing.run()
     
 
 if __name__ == '__main__':
