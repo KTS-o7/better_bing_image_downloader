@@ -7,6 +7,13 @@ import re
 import logging
 from tqdm import tqdm
 
+'''
+Python api to download image form Bing.
+Origina Author: Guru Prasad (g.gaurav541@gmail.com)
+Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com) 
+'''
+
+
 class Bing:
     """_summary_
     A class to download images from Bing.
@@ -178,8 +185,9 @@ class Bing:
                     break
                 links = re.findall('murl&quot;:&quot;(.*?)&quot;', html)
                 if self.verbose:
-                    logging.info("[%%] Indexed %d Images on Page %d.", len(links), self.page_counter + 1)
-                    logging.info("\n===============================================\n")
+                    pass
+                    # logging.info("[%%] Indexed %d Images on Page %d.", len(links), self.page_counter + 1)
+                    # logging.info("\n===============================================\n")
 
                 for link in links:
 
@@ -196,7 +204,6 @@ class Bing:
                     if self.download_count < self.limit and link not in self.seen:
                         self.seen.add(link)
                         self.download_image(link)
-                        # self.sources.append(link)
 
                 self.page_counter += 1
             except urllib.error.HTTPError as e:

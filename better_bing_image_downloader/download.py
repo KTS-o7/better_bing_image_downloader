@@ -1,4 +1,3 @@
-import os
 import sys
 import shutil
 import argparse
@@ -26,6 +25,7 @@ def downloader(query, limit=100, output_dir='dataset', adult_filter_off=True,
     badsites (list): List of bad sites to be excluded.
     name (str): The name of the images.
     """
+
     # engine = 'bing'
     if adult_filter_off:
         adult = 'off'
@@ -49,14 +49,24 @@ def downloader(query, limit=100, output_dir='dataset', adult_filter_off=True,
     logging.info("Downloading Images to %s", str(image_dir.absolute()))
 
     # Initialize tqdm progress bar
+    
     with tqdm(total=limit, unit='MB', ncols=100, colour="green" ,bar_format='{l_bar}{bar} {total_fmt} MB| Download Speed {rate_fmt} | Estimated Time:  {remaining}') as pbar:
         def update_progress_bar(download_count):
             pbar.update(download_count - pbar.n)
 
-
         bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose, badsites, name)
         bing.download_callback = update_progress_bar
         bing.run()
+
+        # After progress bar completes, prompt user to view sources
+    source_input = input('\n\nDo you wish to see the image sources? (Y/N): ')
+    if source_input.lower() == 'y':
+        i=1
+        for src in bing.seen:
+            print(f'{str(i)}. {src}')
+            i+=1
+    else:
+        print('Happy Scraping!')
     
 
 if __name__ == '__main__':
