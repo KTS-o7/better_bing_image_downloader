@@ -8,9 +8,11 @@ import logging
 from tqdm import tqdm
 
 '''
+
 Python api to download image form Bing.
 Origina Author: Guru Prasad (g.gaurav541@gmail.com)
 Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com) 
+
 '''
 
 
@@ -74,7 +76,6 @@ class Bing:
     """
     def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=[], name='Image'):
         self.download_count = 0
-        # self.sources = []
         self.query = query
         self.output_dir = output_dir
         self.adult = adult
@@ -123,19 +124,19 @@ class Bing:
             request = urllib.request.Request(link, None, self.headers)
             image = urllib.request.urlopen(request, timeout=self.timeout).read()
             if not imghdr.what(None, image):
-                pass
-                # logging.error('Invalid image, not saving %s', link)
-                # raise ValueError('Invalid image, not saving %s' % link)
+                
+                logging.error('Invalid image, not saving %s', link)
+                raise ValueError('Invalid image, not saving %s' % link)
             with open(str(file_path), 'wb') as f:
                 f.write(image)
+
         except urllib.error.HTTPError as e:
-            # self.sources-=1
-            pass
-            # logging.error('HTTPError while saving image %s: %s', link, e)
+            self.sources-=1
+            logging.error('HTTPError while saving image %s: %s', link, e)
+
         except urllib.error.URLError as e:
-            # self.sources-=1
-            pass
-            # logging.error('URLError while saving image %s: %s', link, e)
+            self.sources-=1
+            logging.error('URLError while saving image %s: %s', link, e)
 
     def download_image(self, link):
         self.download_count += 1
@@ -161,7 +162,7 @@ class Bing:
 
         except Exception as e:
             self.download_count -= 1
-            # logging.error('Issue getting: %s\nError: %s', link, e)
+            logging.error('Issue getting: %s\nError: %s', link, e)
 
     def run(self):
         while self.download_count < self.limit:
@@ -185,9 +186,8 @@ class Bing:
                     break
                 links = re.findall('murl&quot;:&quot;(.*?)&quot;', html)
                 if self.verbose:
-                    pass
-                    # logging.info("[%%] Indexed %d Images on Page %d.", len(links), self.page_counter + 1)
-                    # logging.info("\n===============================================\n")
+                    logging.info("[%%] Indexed %d Images on Page %d.", len(links), self.page_counter + 1)
+                    logging.info("\n===============================================\n")
 
                 for link in links:
 
@@ -207,10 +207,8 @@ class Bing:
 
                 self.page_counter += 1
             except urllib.error.HTTPError as e:
-                # logging.error('URLError while making request to Bing: %s', e)
-                continue
+                logging.error('URLError while making request to Bing: %s', e)
             except urllib.error.URLError as e:
-                continue
-                # logging.error('URLError while making request to Bing: %s', e)
+                logging.error('URLError while making request to Bing: %s', e)
 
         logging.info("\n\n[%%] Done. Downloaded %d images.", self.download_count)
