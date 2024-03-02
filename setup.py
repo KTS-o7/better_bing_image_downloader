@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="better_bing_image_downloader",
-    version="1.0.4",
+    version="1.4.1",
     author="Krishnatejaswi S",
     author_email="shentharkrishnatejaswi@gmail.com",
     description="This package is built on top of bing-image-downloader by gaurav singh",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/KTS-o7/better_bing_image_downloader",
-    keywords=['bing', 'images', 'scraping', 'image download', 'bulk image downloader',],
+    keywords=['bing', 'images', 'scraping', 'image download', 'bulk image downloader','dataset download', 'dataset generation', 'machine learing data', 'image scarping'],
     packages=['better_bing_image_downloader'],
     classifiers=[
         'Programming Language :: Python :: 3',
