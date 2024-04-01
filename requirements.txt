@@ -1,4 +1,4 @@
-better_bing_image_downloader==1.0.4
+better_bing_image_downloader==1.1.0
 certifi==2024.2.2
 cffi==1.16.0
 charset-normalizer==3.3.2
