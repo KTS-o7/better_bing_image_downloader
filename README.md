@@ -21,6 +21,8 @@ Please do not download or use any image that violates its copyright terms.
 
 ```bash
 git clone https://github.com/KTS-o7better_bing_image_downloader
+python -m venv ./env
+source env/bin/activate
 cd better_bing_image_downloader
 pip install .
 ```

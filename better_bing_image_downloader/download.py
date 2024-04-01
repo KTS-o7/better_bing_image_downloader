@@ -3,7 +3,7 @@ import shutil
 import argparse
 import logging
 from pathlib import Path
-from bing import Bing
+from .bing import Bing
 from tqdm import tqdm
 from math import ceil
 
