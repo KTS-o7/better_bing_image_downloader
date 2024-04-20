@@ -38,7 +38,9 @@ pip install better-bing-image-downloader
 [Package Link](https://pypi.org/project/better-bing-image-downloader/)
 
 ### Usage <br />
+
 #### Using as a Package:
+
 ```python
 from better_bing_image_downloader import downloader
 
@@ -58,6 +60,7 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Im
 `name` : (optional, default is 'Image') Can add a custom name for the images that are downloaded.<br/>
 
 #### Using as a Command Line Tool:
+
 ```bash
     git clone https://github.com/KTS-o7/better_bing_image_downloader.git
     cd better_bing_image_downloader
@@ -66,12 +69,15 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Im
     pip install -r requirements.txt
     cd better_bing_image_downloader
     # This is an example query
-    python multidownloader.py "cool doggos" --engine "Bing"  --max-number 50 --num-threads 5 --driver "firefox_headless"   
+    python multidownloader.py "cool doggos" --engine "Bing"  --max-number 50 --num-threads 5 --driver "firefox_headless"
 ```
+
 #### Command Line Arguments:
+
 ```bash
 multidownloader.py "keywords" [-h] [--engine {Google,Bing}] [--driver {chrome_headless,chrome,api,firefox,firefox_headless}] [--max-number MAX_NUMBER] [--num-threads NUM_THREADS] [--timeout TIMEOUT] [--output OUTPUT] [--safe-mode] [--face-only] [--proxy_http PROXY_HTTP] [--proxy_socks5 PROXY_SOCKS5] [--type {clipart,linedrawing,photograph}] [--color COLOR]
 ```
+
 - `"keywords"`: Keywords to search. ("in quotes")
 - `-h, --help`: Show the help message and exit
 - `--engine, -e`: Image search engine. Choices are "Google" and "Bing". Default is "Bing".
@@ -89,9 +95,11 @@ multidownloader.py "keywords" [-h] [--engine {Google,Bing}] [--driver {chrome_he
 
 ```bash
 # Example usage
-python multidownloader.py "Cool Doggos" --engine Google --driver chrome --max-number 50 --num-threads 10 --timeout 60 --output "./doggo_images" --safe-mode --proxy_http "192.168.0.2:8080" --type photograph --color blue
+python multidownloader.py "Cool Doggos" --engine "Google" --driver "chrome_headless" --max-number 50 --num-threads 10 --timeout 60 --output "./doggo_images" --safe-mode --proxy_http "192.168.0.2:8080" --type "photograph" --color "blue"
 ```
+
 ---
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=KTS-o7/better-bing-image-downloader&type=Date)](https://star-history.com/#KTS-o7/better-bing-image-downloader&Date)

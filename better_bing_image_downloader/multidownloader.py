@@ -1,6 +1,5 @@
-# -*- coding: utf-8 -*-
-# author: Yabin Zheng
-# Email: sczhengyabin@hotmail.com
+# author: Krishnatejaswi S
+# Email: shentharkrishnatejaswi@gmail.com
 
 from __future__ import print_function
 
