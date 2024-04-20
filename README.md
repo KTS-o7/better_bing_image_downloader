@@ -57,6 +57,10 @@ force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Im
 `bad-sites` : (optional, defualt is empty list) Can limit the query to not access the bad sites.<br/>
 `name` : (optional, default is 'Image') Can add a custom name for the images that are downloaded.<br/>
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=KTS-o7/better-bing-image-downloader&type=Date)](https://star-history.com/#KTS-o7/better-bing-image-downloader&Date)
+
 ### License
 
 This project is licensed under the terms of the MIT license.
