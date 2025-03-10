@@ -5,6 +5,7 @@ charset-normalizer==3.3.2
 chromedriver-autoinstaller==0.6.4
 cryptography==42.0.2
 docutils==0.20.1
+filetype==1.2.0
 h11==0.14.0
 idna==3.6
 importlib-metadata==6.0.0
