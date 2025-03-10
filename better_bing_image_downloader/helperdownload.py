@@ -5,11 +5,11 @@
 from __future__ import print_function
 
 import shutil
-import imghdr
 import os
 import concurrent.futures
 import requests
 import socket
+import filetype
 
 headers = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -39,16 +39,15 @@ def download_image(image_url, dst_dir, file_name, timeout=20, proxy_type=None, p
             with open(file_path, 'wb') as f:
                 f.write(response.content)
             response.close()
-            file_type = imghdr.what(file_path)
-            # if file_type is not None:
-            if file_type in ["jpg", "jpeg", "png", "bmp", "webp"]:
-                new_file_name = "{}.{}".format(file_name, file_type)
+            kind = filetype.guess(file_path)
+            if kind and kind.extension in ["jpg", "jpeg", "png", "bmp", "webp"]:
+                new_file_name = "{}.{}".format(file_name, kind.extension)
                 new_file_path = os.path.join(dst_dir, new_file_name)
                 shutil.move(file_path, new_file_path)
                 print("## OK:  {}  {}".format(new_file_name, image_url))
             else:
                 os.remove(file_path)
-                print("## Err: TYPE({})  {}".format(file_type, image_url))
+                print("## Err: Invalid image type  {}".format(image_url))
             break
         except Exception as e:
             if try_times < 3:

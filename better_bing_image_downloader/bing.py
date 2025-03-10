@@ -1,11 +1,11 @@
 from pathlib import Path
 import urllib.request
 import urllib
-import imghdr
 import posixpath
 import re
 import logging
 from tqdm import tqdm
+import filetype
 
 '''
 
@@ -123,8 +123,8 @@ class Bing:
         try:
             request = urllib.request.Request(link, None, self.headers)
             image = urllib.request.urlopen(request, timeout=self.timeout).read()
-            if not imghdr.what(None, image):
-                
+            kind = filetype.guess(image)
+            if kind is None or not kind.mime.startswith('image/'):
                 logging.error('Invalid image, not saving %s', link)
                 raise ValueError('Invalid image, not saving %s' % link)
             with open(str(file_path), 'wb') as f:
