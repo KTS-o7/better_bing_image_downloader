@@ -102,7 +102,7 @@ python multidownloader.py "Cool Doggos" --engine "Google" --driver "chrome_headl
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=KTS-o7/better-bing-image-downloader&type=Date)](https://star-history.com/#KTS-o7/better-bing-image-downloader&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=KTS-o7/better-bing-image-downloader&type=Date)](https://www.star-history.com/#KTS-o7/better-bing-image-downloader&Date)
 
 ### License
 
