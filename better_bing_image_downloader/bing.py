@@ -170,11 +170,12 @@ class Bing:
                 logging.info('\n\n[!]Indexing page: %d\n', self.page_counter + 1)
             # Parse the page source and download pics
             try:
+                page_size = 35 # Bing API is currently hard-coded to 35, so changes to this value will be ignored
                 request_url = (
                     'https://www.bing.com/images/async?q='
                     + urllib.parse.quote_plus(self.query)
-                    + '&first=' + str(self.page_counter)
-                    + '&count=' + str(self.limit)
+                    + '&first=' + str(self.page_counter * page_size)
+                    + '&count=' + str(page_size)
                     + '&adlt=' + self.adult
                     + '&qft=' + ('' if self.filter is None else self.get_filter(self.filter))
                 )
@@ -189,6 +190,7 @@ class Bing:
                     logging.info("[%%] Indexed %d Images on Page %d.", len(links), self.page_counter + 1)
                     logging.info("\n===============================================\n")
 
+                found_image = False
                 for link in links:
 
                     isbadsite = False
@@ -204,6 +206,11 @@ class Bing:
                     if self.download_count < self.limit and link not in self.seen:
                         self.seen.add(link)
                         self.download_image(link)
+                        found_image = True
+
+                if not found_image:
+                    logging.info("[%] No more images are available")
+                    break
 
                 self.page_counter += 1
             except urllib.error.HTTPError as e:
