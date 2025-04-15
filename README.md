@@ -166,13 +166,14 @@ This program lets you download images from search engines. Please do not downloa
 
 ## Changelog
 
-### 1.1.4
+### 2.0.0
 
 - Added parallel downloading for significantly faster image retrieval
 - Improved error handling and recovery
 - Better memory management and code organization
 - Fixed progress bar display issues
 - Added max_workers parameter to control parallel downloads
+- Added new requirements
 
 ### 1.1.3
 
