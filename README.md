@@ -1,118 +1,192 @@
 # Better Bing Image Downloader
 
-## Table of Contents
+A powerful Python tool for downloading images from Bing and Google image search engines.
 
-- [Disclaimer](#disclaimer)
-- [Installation](#installation)
-- [Usage](#usage)
-- [License](#license)
-- [Contact](#contact)
-
-### Disclaimer<br />
-
-This program lets you download tons of images from Bing.
-Please do not download or use any image that violates its copyright terms.
-
-![GitHub top language](https://img.shields.io/github/languages/top/KTS-o7/better_bing_image_downloader)
-![GitHub](https://img.shields.io/github/license/KTS-o7/better-bing-image-downloader)
+[![GitHub top language](https://img.shields.io/github/languages/top/KTS-o7/better_bing_image_downloader)](https://github.com/KTS-o7/better_bing_image_downloader)
+[![GitHub](https://img.shields.io/github/license/KTS-o7/better-bing-image-downloader)](https://github.com/KTS-o7/better-bing-image-downloader/blob/main/LICENSE)
+[![PyPI version](https://badge.fury.io/py/better-bing-image-downloader.svg)](https://pypi.org/project/better-bing-image-downloader/)
 [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2FKTS-o7%2Fbetter_bing_image_downloader&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://hits.seeyoufarm.com)
 
-### Installation <br />
+## Features
 
-```bash
-git clone https://github.com/KTS-o7better_bing_image_downloader
-python -m venv ./env
-source env/bin/activate
-cd better_bing_image_downloader
-pip install .
-```
+- Download images from Bing and Google search engines
+- Parallel downloading for significantly faster performance
+- Multiple filtering options (image type, color, adult content, etc.)
+- Support for both API and browser-based image retrieval
+- Command-line interface and Python API
+- Multiple browser support (Firefox, Chrome, headless options)
+- Proxy support
 
-or
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Python API](#python-api)
+  - [Command Line Interface](#command-line-interface)
+- [Parameters](#parameters)
+- [Examples](#examples)
+- [License](#license)
+- [Disclaimer](#disclaimer)
+- [Changelog](#changelog)
+- [Contact](#contact)
+
+## Installation
+
+### Using pip
 
 ```bash
 pip install better-bing-image-downloader
 ```
 
-### PyPi <br />
+### From source
 
-[Package Link](https://pypi.org/project/better-bing-image-downloader/)
+```bash
+git clone https://github.com/KTS-o7/better_bing_image_downloader
+cd better_bing_image_downloader
+python -m venv ./env
+source env/bin/activate  # On Windows: env\Scripts\activate
+pip install -r requirements.txt
+pip install .
+```
 
-### Usage <br />
+## Usage
 
-#### Using as a Package:
+### Python API
 
 ```python
 from better_bing_image_downloader import downloader
 
-downloader(query_string, limit=100, output_dir='dataset', adult_filter_off=True,
-force_replace=False, timeout=60, filter="", verbose=True, badsites= [], name='Image')
+# Basic usage
+downloader("cute puppies", limit=50)
+
+# Advanced usage
+downloader(
+    query="cute puppies",
+    limit=100,
+    output_dir="my_images",
+    adult_filter_off=True,
+    force_replace=False,
+    timeout=60,
+    filter="photo",  # Options: "line", "photo", "clipart", "gif", "transparent"
+    verbose=True,
+    badsites=["stock.adobe.com", "shutterstock.com"],
+    name="Puppy",
+    max_workers=8  # Parallel downloads
+)
 ```
 
-`query_string` : String to be searched.<br />
-`limit` : (optional, default is 100) Number of images to download.<br />
-`output_dir` : (optional, default is 'dataset') Name of output dir.<br />
-`adult_filter_off` : (optional, default is True) Enable of disable adult filteration.<br />
-`force_replace` : (optional, default is False) Delete folder if present and start a fresh download.<br />
-`timeout` : (optional, default is 60) timeout for connection in seconds.<br />
-`filter` : (optional, default is "") filter, choose from [line, photo, clipart, gif, transparent]<br />
-`verbose` : (optional, default is True) Enable downloaded message.<br />
-`bad-sites` : (optional, defualt is empty list) Can limit the query to not access the bad sites.<br/>
-`name` : (optional, default is 'Image') Can add a custom name for the images that are downloaded.<br/>
+### Command Line Interface
 
-#### Using as a Command Line Tool:
+The package provides two command-line interfaces:
+
+#### 1. Simple CLI (Bing-only)
 
 ```bash
-    git clone https://github.com/KTS-o7/better_bing_image_downloader.git
-    cd better_bing_image_downloader
-    python -m venv ./env
-    source env/bin/activate
-    pip install -r requirements.txt
-    cd better_bing_image_downloader
-    # This is an example query
-    python multidownloader.py "cool doggos" --engine "Bing"  --max-number 50 --num-threads 5 --driver "firefox_headless"
+python -m better_bing_image_downloader.download "query" [options]
 ```
 
-#### Command Line Arguments:
+#### 2. Advanced CLI (Bing and Google)
 
 ```bash
-multidownloader.py "keywords" [-h] [--engine {Google,Bing}] [--driver {chrome_headless,chrome,api,firefox,firefox_headless}] [--max-number MAX_NUMBER] [--num-threads NUM_THREADS] [--timeout TIMEOUT] [--output OUTPUT] [--safe-mode] [--face-only] [--proxy_http PROXY_HTTP] [--proxy_socks5 PROXY_SOCKS5] [--type {clipart,linedrawing,photograph}] [--color COLOR]
+python -m better_bing_image_downloader.multidownloader "query" [options]
 ```
 
-- `"keywords"`: Keywords to search. ("in quotes")
-- `-h, --help`: Show the help message and exit
-- `--engine, -e`: Image search engine. Choices are "Google" and "Bing". Default is "Bing".
-- `--driver, -d`: Image search engine. Choices are "chrome_headless", "chrome", "api", "firefox", "firefox_headless". Default is "firefox_headless".
-- `--max-number, -n`: Max number of images download for the keywords. Default is 100.
-- `--num-threads, -j`: Number of threads to concurrently download images. Default is 50.
-- `--timeout, -t`: Seconds to timeout when download an image. Default is 10.
-- `--output, -o`: Output directory to save downloaded images. Default is "./download_images".
-- `--safe-mode, -S`: Turn on safe search mode. (Only effective in Google)
-- `--face-only, -`F: Only search for faces.
-- `--proxy_http, -ph`: Set http proxy (e.g. 192.168.0.2:8080)
-- `--proxy_socks5, -ps`: Set socks5 proxy (e.g. 192.168.0.2:1080)
-- -`-type, -ty`: What kinds of images to download. Choices are "clipart", "linedrawing", "photograph".
-- `--color, -cl`: Specify the color of desired images.
+## Parameters
+
+### Python API Parameters
+
+| Parameter        | Type | Default    | Description                                                |
+| ---------------- | ---- | ---------- | ---------------------------------------------------------- |
+| query            | str  | (required) | Search term                                                |
+| limit            | int  | 100        | Maximum number of images to download                       |
+| output_dir       | str  | 'dataset'  | Directory to save images                                   |
+| adult_filter_off | bool | True       | Disable adult content filter                               |
+| force_replace    | bool | False      | Replace existing files and directories                     |
+| timeout          | int  | 60         | Connection timeout in seconds                              |
+| filter           | str  | ""         | Image type filter (line, photo, clipart, gif, transparent) |
+| verbose          | bool | True       | Display detailed output                                    |
+| badsites         | list | []         | List of sites to exclude from results                      |
+| name             | str  | 'Image'    | Base name for downloaded images                            |
+| max_workers      | int  | 4          | Number of parallel download threads                        |
+
+### Command Line Arguments (multidownloader.py)
+
+| Argument       | Short | Default             | Description                                          |
+| -------------- | ----- | ------------------- | ---------------------------------------------------- |
+| --engine       | -e    | "Bing"              | Search engine ("Google" or "Bing")                   |
+| --driver       | -d    | "firefox_headless"  | Browser driver to use                                |
+| --max-number   | -n    | 100                 | Maximum number of images to download                 |
+| --num-threads  | -j    | 50                  | Number of concurrent download threads                |
+| --timeout      | -t    | 10                  | Download timeout in seconds                          |
+| --output       | -o    | "./download_images" | Output directory                                     |
+| --safe-mode    | -S    | False               | Enable safe search mode                              |
+| --face-only    | -F    | False               | Only search for faces                                |
+| --proxy_http   | -ph   | None                | HTTP proxy address (e.g., 192.168.0.2:8080)          |
+| --proxy_socks5 | -ps   | None                | SOCKS5 proxy address (e.g., 192.168.0.2:1080)        |
+| --type         | -ty   | None                | Image type filter (clipart, linedrawing, photograph) |
+| --color        | -cl   | None                | Color filter for images                              |
+
+## Examples
+
+### Basic Search
+
+```python
+from better_bing_image_downloader import downloader
+
+# Download 100 cat images to ./dataset/cats
+downloader("cats", limit=100)
+```
+
+### Advanced Search with Filters
+
+```python
+# Download 50 transparent clipart images with parallel processing
+downloader(
+    query="logo design",
+    limit=50,
+    filter="transparent",
+    max_workers=8,
+    output_dir="logos"
+)
+```
+
+### Command Line Usage
 
 ```bash
-# Example usage
-python multidownloader.py "Cool Doggos" --engine "Google" --driver "chrome_headless" --max-number 50 --num-threads 10 --timeout 60 --output "./doggo_images" --safe-mode --proxy_http "192.168.0.2:8080" --type "photograph" --color "blue"
+# Download 50 landscape photographs using Google
+python -m better_bing_image_downloader.multidownloader "mountain landscape" --engine "Google" --max-number 50 --type "photograph"
+
+# Download 100 cat images using Bing with Firefox headless
+python -m better_bing_image_downloader.multidownloader "cats" --engine "Bing" --driver "firefox_headless" --max-number 100
 ```
 
----
+## Disclaimer
+
+This program lets you download images from search engines. Please do not download or use any image that violates its copyright terms. The developers of this tool are not responsible for any misuse.
+
+## Changelog
+
+### 1.1.4
+
+- Added parallel downloading for significantly faster image retrieval
+- Improved error handling and recovery
+- Better memory management and code organization
+- Fixed progress bar display issues
+- Added max_workers parameter to control parallel downloads
+
+### 1.1.3
+
+- Fixed issue with invalid image types
+- Replaced imghdr with filetype for more reliable image type detection
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Contact
+
+If you have any questions or feedback, please contact the developer at [shentharkrishnatejaswi@gmail.com](mailto:shentharkrishnatejaswi@gmail.com).
 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=KTS-o7/better-bing-image-downloader&type=Date)](https://www.star-history.com/#KTS-o7/better-bing-image-downloader&Date)
-
-### License
-
-This project is licensed under the terms of the MIT license.
-
-### Contact
-
-If you have any questions or feedback, please contact us at [email](mailto:shentharkrishnatejaswi@gmail.com).
-
-### Changelog
-
-- 1.1.3:
-  - Fixed issue with invalid image types. Deleted imghdr and used filetype to check image types.
