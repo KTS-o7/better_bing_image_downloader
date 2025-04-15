@@ -1,6 +1,6 @@
 attrs==23.2.0
 certifi==2024.2.2
-cffi==1.16.0
+cffi==1.17.1
 charset-normalizer==3.3.2
 chromedriver-autoinstaller==0.6.4
 cryptography==42.0.2

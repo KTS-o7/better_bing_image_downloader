@@ -3,13 +3,20 @@ import shutil
 import argparse
 import logging
 from pathlib import Path
-from .bing import Bing
+from bing import Bing
 from tqdm import tqdm
-from math import ceil
 
 
-def downloader(query, limit=100, output_dir='dataset', adult_filter_off=True,
-            force_replace=False, timeout=60, filter="", verbose=True, badsites=[], name='Image'):
+def downloader(query:str,
+                limit:int=100, 
+                output_dir:str='dataset',
+                adult_filter_off:bool=True,
+                force_replace:bool=False, 
+                timeout:int=60, 
+                filter:str="", 
+                verbose:bool=True, 
+                badsites:list=[], 
+                name:str='Image', max_workers:int=4) -> int:
     """
     Download images using the Bing image scraper.
     
@@ -24,52 +31,68 @@ def downloader(query, limit=100, output_dir='dataset', adult_filter_off=True,
     verbose (bool): Whether to print detailed output.
     badsites (list): List of bad sites to be excluded.
     name (str): The name of the images.
+    max_workers (int): Maximum number of parallel download workers (default: 4).
     """
+    # Set adult filter setting
+    adult = 'off' if adult_filter_off else 'on'
 
-    # engine = 'bing'
-    if adult_filter_off:
-        adult = 'off'
-    else:
-        adult = 'on'
-
-    image_dir = Path(output_dir).joinpath(query).absolute()
-
-    if force_replace:
-        if Path.is_dir(image_dir):
-            shutil.rmtree(image_dir)
-
-    # check directory and create if necessary
+    # Create output directory path
+    image_dir = Path(output_dir) / query
+    
+    # Handle directory replacement if requested
+    if force_replace and image_dir.exists():
+        shutil.rmtree(image_dir)
+    
+    # Create directory if it doesn't exist
     try:
-        if not Path.is_dir(image_dir):
-            Path.mkdir(image_dir, parents=True)
+        image_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        logging.error('Failed to create directory. %s', e)
+        logging.error('Failed to create directory: %s', e)
         sys.exit(1)
         
-    logging.info("Downloading Images to %s", str(image_dir.absolute()))
+    logging.info("Downloading Images to %s", image_dir)
 
-    # Initialize tqdm progress bar
-    
-    with tqdm(total=limit, unit='MB', ncols=100, colour="green" ,bar_format='{l_bar}{bar} {total_fmt} MB| Download Speed {rate_fmt} | Estimated Time:  {remaining}') as pbar:
+    # Initialize and configure progress bar
+    with tqdm(total=limit, unit='img', ncols=100, colour="green", 
+             bar_format='{l_bar}{bar} {n_fmt}/{total_fmt} imgs | Speed: {rate_fmt} | ETA: {remaining}') as pbar:
+        
+        # Define callback for progress updates
         def update_progress_bar(download_count):
-            pbar.update(download_count - pbar.n)
+            pbar.n = download_count
+            pbar.refresh()
 
-        bing = Bing(query, limit, image_dir, adult, timeout, filter, verbose, badsites, name)
-        bing.download_callback = update_progress_bar
+        # Initialize and run Bing downloader with parallel processing
+        bing = Bing(
+            query=query, 
+            limit=limit, 
+            output_dir=image_dir, 
+            adult=adult, 
+            timeout=timeout, 
+            filter=filter, 
+            verbose=verbose, 
+            badsites=badsites, 
+            name=name,
+            max_workers=max_workers
+        )
+        # Type annotation is ignored in runtime
+        bing.download_callback = update_progress_bar  # type: ignore
         bing.run()
 
-        # After progress bar completes, prompt user to view sources
-    source_input = input('\n\nDo you wish to see the image sources? (Y/N): ')
-    if source_input.lower() == 'y':
-        i=1
-        for src in bing.seen:
-            print(f'{str(i)}. {src}')
-            i+=1
+    # After download completes, offer to show sources
+    if input('\nDo you wish to see the image sources? (Y/N): ').lower() == 'y':
+        if bing.seen:
+            for i, src in enumerate(bing.seen, 1):
+                print(f'{i}. {src}')
+        else:
+            print("No image sources were found.")
     else:
         print('Happy Scraping!')
     
+    return bing.download_count
+
 
 if __name__ == '__main__':
+    # Set up argument parser
     parser = argparse.ArgumentParser(description='Download images using Bing.')
     parser.add_argument('query', type=str, help='The search query.')
     parser.add_argument('-l','--limit', type=int, default=100, help='The maximum number of images to download.')
@@ -81,7 +104,26 @@ if __name__ == '__main__':
     parser.add_argument('-v','--verbose', action='store_true', help='Whether to print detailed output.')
     parser.add_argument('-b','--bad-sites', nargs='*', default=[], help='List of bad sites to be excluded.')
     parser.add_argument('-n', '--name', type=str, default='Image', help='The name of the images.')
+    parser.add_argument('-w', '--workers', type=int, default=4, help='Maximum number of parallel download workers.')
+    
+    # Parse arguments and run downloader
     args = parser.parse_args()
     
-    downloader(args.query, args.limit, args.output_dir, args.adult_filter_off, 
-    args.force_replace, args.timeout, args.filter, args.verbose, args.bad_sites, args.name)
+    # Configure logging
+    logging_level = logging.INFO if args.verbose else logging.WARNING
+    logging.basicConfig(level=logging_level, format='%(levelname)s: %(message)s')
+    
+    # Run downloader with parsed arguments
+    downloader(
+        args.query, 
+        args.limit, 
+        args.output_dir, 
+        args.adult_filter_off, 
+        args.force_replace, 
+        args.timeout, 
+        args.filter, 
+        args.verbose, 
+        args.bad_sites, 
+        args.name,
+        args.workers
+    )
