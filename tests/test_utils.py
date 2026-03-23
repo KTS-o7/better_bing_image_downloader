@@ -9,9 +9,16 @@ def test_resolve_dependencies_non_chrome_always_passes():
     assert resolve_dependencies("api") is True
 
 
-def test_resolve_dependencies_default_does_not_crash():
-    # Non-chrome driver, no chromedriver needed
-    assert resolve_dependencies("firefox_headless") is True
+def test_resolve_dependencies_default_chrome_calls_installer():
+    """Default driver is chrome_headless; must invoke chromedriver_autoinstaller"""
+    import sys
+    from unittest.mock import MagicMock
+    fake_installer = MagicMock()
+    fake_installer.install.return_value = '/path/to/chromedriver'
+    with patch.dict(sys.modules, {'chromedriver_autoinstaller': fake_installer}):
+        result = resolve_dependencies()  # no args → default "chrome_headless"
+    fake_installer.install.assert_called_once()
+    assert result is True
 
 
 def test_resolve_dependencies_chrome_calls_installer():
