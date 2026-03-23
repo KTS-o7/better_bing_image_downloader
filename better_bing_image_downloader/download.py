@@ -6,16 +6,20 @@ from .bing import Bing
 from tqdm import tqdm
 
 
-def downloader(query:str,
-                limit:int=100, 
-                output_dir:str='dataset',
-                adult_filter_off:bool=True,
-                force_replace:bool=False, 
-                timeout:int=60, 
-                image_filter:str="", 
-                verbose:bool=True, 
-                badsites:list=None,  # type: ignore[assignment]
-                name:str='Image', max_workers:int=4) -> int:
+def downloader(
+    query: str,
+    limit: int = 100,
+    output_dir: str = 'dataset',
+    adult_filter_off: bool = True,
+    force_replace: bool = False,
+    timeout: int = 60,
+    image_filter: str = "",
+    verbose: bool = True,
+    badsites: list = None,  # type: ignore[assignment]
+    name: str = 'Image',
+    max_workers: int = 4,
+    **kwargs  # backward compat
+) -> int:
     """
     Download images using the Bing image scraper.
     
@@ -32,6 +36,16 @@ def downloader(query:str,
     name (str): The name of the images.
     max_workers (int): Maximum number of parallel download workers (default: 4).
     """
+    # Backward compatibility: accept old 'filter' keyword arg
+    if 'filter' in kwargs:
+        import warnings
+        warnings.warn(
+            "The 'filter' parameter is deprecated, use 'image_filter' instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        image_filter = kwargs.pop('filter')
+
     # Set adult filter setting
     adult = 'off' if adult_filter_off else 'on'
 
@@ -48,7 +62,7 @@ def downloader(query:str,
     # Create directory if it doesn't exist
     try:
         image_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
+    except OSError as e:
         raise OSError(f'Failed to create directory {image_dir}: {e}') from e
         
     logging.info("Downloading Images to %s", image_dir)

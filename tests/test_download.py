@@ -81,3 +81,20 @@ def test_downloader_force_replace_deletes_existing_dir():
         downloader("cats", limit=1, output_dir=tmp, force_replace=True)
 
     assert not os.path.exists(sentinel_file), "force_replace should have deleted existing files"
+
+
+def test_downloader_old_filter_param_works_with_deprecation_warning():
+    """Old 'filter=' kwarg should still work but emit DeprecationWarning"""
+    import warnings
+    tmp = tempfile.mkdtemp()
+    with patch('better_bing_image_downloader.download.Bing') as MockBing:
+        mock_instance = MagicMock()
+        mock_instance.download_count = 0
+        mock_instance.seen = set()
+        MockBing.return_value = mock_instance
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            downloader("cats", limit=1, output_dir=tmp, filter="photo")
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "image_filter" in str(w[0].message)

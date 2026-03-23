@@ -67,7 +67,7 @@ downloader(
     adult_filter_off=True,
     force_replace=False,
     timeout=60,
-    filter="photo",  # Options: "line", "photo", "clipart", "gif", "transparent"
+    image_filter="photo",  # Options: "line", "photo", "clipart", "gif", "transparent"
     verbose=True,
     badsites=["stock.adobe.com", "shutterstock.com"],
     name="Puppy",
@@ -103,7 +103,7 @@ python -m better_bing_image_downloader.multidownloader "query" [options]
 | adult_filter_off | bool | True       | Disable adult content filter                               |
 | force_replace    | bool | False      | Replace existing files and directories                     |
 | timeout          | int  | 60         | Connection timeout in seconds                              |
-| filter           | str  | ""         | Image type filter (line, photo, clipart, gif, transparent) |
+| image_filter     | str  | ""         | Image type filter (line, photo, clipart, gif, transparent) |
 | verbose          | bool | True       | Display detailed output                                    |
 | badsites         | list | []         | List of sites to exclude from results                      |
 | name             | str  | 'Image'    | Base name for downloaded images                            |
@@ -144,7 +144,7 @@ downloader("cats", limit=100)
 downloader(
     query="logo design",
     limit=50,
-    filter="transparent",
+    image_filter="transparent",
     max_workers=8,
     output_dir="logos"
 )
