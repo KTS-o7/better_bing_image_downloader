@@ -1,4 +1,3 @@
-import sys
 import shutil
 import argparse
 import logging
@@ -13,9 +12,9 @@ def downloader(query:str,
                 adult_filter_off:bool=True,
                 force_replace:bool=False, 
                 timeout:int=60, 
-                filter:str="", 
+                image_filter:str="", 
                 verbose:bool=True, 
-                badsites:list=[], 
+                badsites:list=None,  # type: ignore[assignment]
                 name:str='Image', max_workers:int=4) -> int:
     """
     Download images using the Bing image scraper.
@@ -27,7 +26,7 @@ def downloader(query:str,
     adult_filter_off (bool): Whether to turn off the adult filter.
     force_replace (bool): Whether to replace existing files.
     timeout (int): The timeout for the image download.
-    filter (str): The filter to apply to the search results.
+    image_filter (str): The filter to apply to the search results.
     verbose (bool): Whether to print detailed output.
     badsites (list): List of bad sites to be excluded.
     name (str): The name of the images.
@@ -35,6 +34,9 @@ def downloader(query:str,
     """
     # Set adult filter setting
     adult = 'off' if adult_filter_off else 'on'
+
+    # Resolve mutable default
+    badsites = badsites or []
 
     # Create output directory path
     image_dir = Path(output_dir) / query
@@ -47,8 +49,7 @@ def downloader(query:str,
     try:
         image_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        logging.error('Failed to create directory: %s', e)
-        sys.exit(1)
+        raise OSError(f'Failed to create directory {image_dir}: {e}') from e
         
     logging.info("Downloading Images to %s", image_dir)
 
@@ -68,7 +69,7 @@ def downloader(query:str,
             output_dir=image_dir, 
             adult=adult, 
             timeout=timeout, 
-            filter=filter, 
+            filter=image_filter, 
             verbose=verbose, 
             badsites=badsites, 
             name=name,
@@ -78,16 +79,6 @@ def downloader(query:str,
         bing.download_callback = update_progress_bar  # type: ignore
         bing.run()
 
-    # After download completes, offer to show sources
-    if input('\nDo you wish to see the image sources? (Y/N): ').lower() == 'y':
-        if bing.seen:
-            for i, src in enumerate(bing.seen, 1):
-                print(f'{i}. {src}')
-        else:
-            print("No image sources were found.")
-    else:
-        print('Happy Scraping!')
-    
     return bing.download_count
 
 
@@ -100,7 +91,7 @@ if __name__ == '__main__':
     parser.add_argument('-a','--adult_filter_off', action='store_true', help='Whether to turn off the adult filter.')
     parser.add_argument('-F','--force_replace', action='store_true', help='Whether to replace existing files.')
     parser.add_argument('-t','--timeout', type=int, default=60, help='The timeout for the image download.')
-    parser.add_argument('-f','--filter', type=str, default="", help='The filter to apply to the search results.')
+    parser.add_argument('-f','--filter', dest='image_filter', type=str, default="", help='The filter to apply to the search results.')
     parser.add_argument('-v','--verbose', action='store_true', help='Whether to print detailed output.')
     parser.add_argument('-b','--bad-sites', nargs='*', default=[], help='List of bad sites to be excluded.')
     parser.add_argument('-n', '--name', type=str, default='Image', help='The name of the images.')
@@ -121,7 +112,7 @@ if __name__ == '__main__':
         args.adult_filter_off, 
         args.force_replace, 
         args.timeout, 
-        args.filter, 
+        args.image_filter, 
         args.verbose, 
         args.bad_sites, 
         args.name,
