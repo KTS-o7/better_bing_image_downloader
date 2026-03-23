@@ -1,12 +1,10 @@
 import socket
-import tempfile
 import os
-import pytest
 from unittest.mock import patch, MagicMock
 from better_bing_image_downloader import helperdownload
 
 
-def test_download_images_does_not_mutate_global_socket_timeout():
+def test_download_images_does_not_mutate_global_socket_timeout(tmp_path):
     """download_images must not call socket.setdefaulttimeout"""
     original_timeout = socket.getdefaulttimeout()
     with patch('better_bing_image_downloader.helperdownload.requests.get') as mock_get:
@@ -16,7 +14,7 @@ def test_download_images_does_not_mutate_global_socket_timeout():
         with patch('better_bing_image_downloader.helperdownload.filetype.guess', return_value=None):
             helperdownload.download_images(
                 ["http://example.com/img.jpg"],
-                dst_dir=tempfile.mkdtemp(),
+                dst_dir=str(tmp_path),
                 timeout=5
             )
     after_timeout = socket.getdefaulttimeout()
@@ -44,9 +42,8 @@ def test_default_concurrency_is_reasonable():
     assert default_concurrency <= 10, f"concurrency default {default_concurrency} is too high"
 
 
-def test_invalid_image_leaves_no_orphaned_file():
+def test_invalid_image_leaves_no_orphaned_file(tmp_path):
     """After rejecting an invalid image, no temp files should remain"""
-    tmp = tempfile.mkdtemp()
     with patch('better_bing_image_downloader.helperdownload.requests.get') as mock_get:
         mock_resp = MagicMock()
         mock_resp.content = b'not an image'
@@ -54,10 +51,10 @@ def test_invalid_image_leaves_no_orphaned_file():
         with patch('better_bing_image_downloader.helperdownload.filetype.guess', return_value=None):
             helperdownload.download_image(
                 "http://example.com/notanimage.txt",
-                tmp,
+                str(tmp_path),
                 "test_img",
                 timeout=5
             )
     # No files should remain in the directory
-    remaining_files = os.listdir(tmp)
+    remaining_files = os.listdir(str(tmp_path))
     assert remaining_files == [], f"Orphaned files found: {remaining_files}"
