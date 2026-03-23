@@ -96,39 +96,39 @@ def downloader(
     return bing.download_count
 
 
-if __name__ == '__main__':
-    # Set up argument parser
+def main():
+    """Entry point for the 'bbid' CLI command."""
     parser = argparse.ArgumentParser(description='Download images using Bing.')
     parser.add_argument('query', type=str, help='The search query.')
-    parser.add_argument('-l','--limit', type=int, default=100, help='The maximum number of images to download.')
-    parser.add_argument('-d','--output_dir', type=str, default='dataset', help='The directory to save the images in.')
-    parser.add_argument('-a','--adult_filter_off', action='store_true', help='Whether to turn off the adult filter.')
-    parser.add_argument('-F','--force_replace', action='store_true', help='Whether to replace existing files.')
-    parser.add_argument('-t','--timeout', type=int, default=60, help='The timeout for the image download.')
-    parser.add_argument('-f','--filter', dest='image_filter', type=str, default="", help='The filter to apply to the search results.')
-    parser.add_argument('-v','--verbose', action='store_true', help='Whether to print detailed output.')
-    parser.add_argument('-b','--bad-sites', nargs='*', default=[], help='List of bad sites to be excluded.')
+    parser.add_argument('-l', '--limit', type=int, default=100, help='The maximum number of images to download.')
+    parser.add_argument('-d', '--output_dir', type=str, default='dataset', help='The directory to save the images in.')
+    parser.add_argument('-a', '--adult_filter_off', action='store_true', help='Whether to turn off the adult filter.')
+    parser.add_argument('-F', '--force_replace', action='store_true', help='Whether to replace existing files.')
+    parser.add_argument('-t', '--timeout', type=int, default=60, help='The timeout for the image download.')
+    parser.add_argument('-f', '--filter', type=str, default="", dest='image_filter', help='The filter to apply to the search results.')
+    parser.add_argument('-v', '--verbose', action='store_true', help='Whether to print detailed output.')
+    parser.add_argument('-b', '--bad-sites', nargs='*', default=[], help='List of bad sites to be excluded.')
     parser.add_argument('-n', '--name', type=str, default='Image', help='The name of the images.')
     parser.add_argument('-w', '--workers', type=int, default=4, help='Maximum number of parallel download workers.')
-    
-    # Parse arguments and run downloader
+
     args = parser.parse_args()
-    
-    # Configure logging
     logging_level = logging.INFO if args.verbose else logging.WARNING
     logging.basicConfig(level=logging_level, format='%(levelname)s: %(message)s')
-    
-    # Run downloader with parsed arguments
+
     downloader(
-        args.query, 
-        args.limit, 
-        args.output_dir, 
-        args.adult_filter_off, 
-        args.force_replace, 
-        args.timeout, 
-        args.image_filter, 
-        args.verbose, 
-        args.bad_sites, 
+        args.query,
+        args.limit,
+        args.output_dir,
+        args.adult_filter_off,
+        args.force_replace,
+        args.timeout,
+        args.image_filter,
+        args.verbose,
+        args.bad_sites,
         args.name,
         args.workers
     )
+
+
+if __name__ == '__main__':
+    main()
