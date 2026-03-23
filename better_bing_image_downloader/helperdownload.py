@@ -7,8 +7,9 @@ from __future__ import print_function
 import shutil
 import os
 import concurrent.futures
+import tempfile as _tempfile
+import time
 import requests
-import socket
 import filetype
 
 headers = {
@@ -20,6 +21,9 @@ headers = {
     # 'Connection': 'close',
 }
 
+VALID_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "bmp", "webp", "gif", "tiff", "ico"}
+
+
 def download_image(image_url, dst_dir, file_name, timeout=20, proxy_type=None, proxy=None):
     proxies = None
     if proxy_type is not None:
@@ -29,28 +33,36 @@ def download_image(image_url, dst_dir, file_name, timeout=20, proxy_type=None, p
         }
 
     response = None
-    file_path = os.path.join(dst_dir, file_name)
     try_times = 0
     while True:
         try:
             try_times += 1
             response = requests.get(
                 image_url, headers=headers, timeout=timeout, proxies=proxies)
-            with open(file_path, 'wb') as f:
-                f.write(response.content)
-            response.close()
-            kind = filetype.guess(file_path)
-            if kind and kind.extension in ["jpg", "jpeg", "png", "bmp", "webp"]:
-                new_file_name = "{}.{}".format(file_name, kind.extension)
-                new_file_path = os.path.join(dst_dir, new_file_name)
-                shutil.move(file_path, new_file_path)
-                print("## OK:  {}  {}".format(new_file_name, image_url))
-            else:
-                os.remove(file_path)
-                print("## Err: Invalid image type  {}".format(image_url))
+            tmp_fd, tmp_path = _tempfile.mkstemp(dir=dst_dir)
+            try:
+                with os.fdopen(tmp_fd, 'wb') as f:
+                    f.write(response.content)
+                response.close()
+                kind = filetype.guess(tmp_path)
+                if kind and kind.extension in VALID_IMAGE_EXTENSIONS:
+                    final_path = os.path.join(dst_dir, "{}.{}".format(file_name, kind.extension))
+                    shutil.move(tmp_path, final_path)
+                    print("## OK:  {}  {}".format(os.path.basename(final_path), image_url))
+                else:
+                    os.remove(tmp_path)
+                    print("## Err: Invalid image type  {}".format(image_url))
+            except Exception:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+                raise
             break
         except Exception as e:
             if try_times < 3:
+                time.sleep(2 ** try_times)  # 2s, 4s
                 continue
             if response:
                 response.close()
@@ -58,7 +70,7 @@ def download_image(image_url, dst_dir, file_name, timeout=20, proxy_type=None, p
             break
 
 
-def download_images(image_urls, dst_dir, file_prefix="img", concurrency=50, timeout=20, proxy_type=None, proxy=None):
+def download_images(image_urls, dst_dir, file_prefix="img", concurrency=10, timeout=20, proxy_type=None, proxy=None):
     """
     Download image according to given urls and automatically rename them in order.
     :param timeout:
@@ -70,8 +82,6 @@ def download_images(image_urls, dst_dir, file_prefix="img", concurrency=50, time
     :param concurrency: number of requests process simultaneously
     :return: none
     """
-
-    socket.setdefaulttimeout(timeout)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
         future_list = list()
