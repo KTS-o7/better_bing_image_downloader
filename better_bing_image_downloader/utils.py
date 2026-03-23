@@ -2,8 +2,6 @@
 # author: Krishnatejaswi S
 # Email: shentharkrishnatejaswi@gmail.com
 
-import chromedriver_autoinstaller
-
 def gen_valid_dir_name_for_keywords(keywords):
     keep = ["-", "_", "."]
     keywords = keywords.replace(" ", "_").replace(":", "-")
@@ -69,8 +67,9 @@ def gen_keywords_list_from_file(filepath):
     with open(filepath, "r", encoding="utf-8") as f:
         return f.readlines()
 
-def resolve_dependencies(driver=str):
+def resolve_dependencies(driver: str = "firefox_headless") -> bool:
     if "chrome" in driver:
+        import chromedriver_autoinstaller
         print("Checking Google Chrome and chromedriver ...")
         driver_path = chromedriver_autoinstaller.install()
         if not driver_path:

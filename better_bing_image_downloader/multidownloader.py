@@ -6,9 +6,9 @@ from __future__ import print_function
 import argparse
 import sys
 
-import crawler
-import helperdownload
-import utils
+from . import crawler
+from . import helperdownload
+from . import utils
 
 def main(argv):
     parser = argparse.ArgumentParser(description="Image helperdownload")
