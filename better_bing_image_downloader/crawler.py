@@ -10,7 +10,7 @@ import time
 import os
 import json
 import shutil
-from urllib.parse import unquote, quote
+from urllib.parse import quote
 from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -74,40 +74,46 @@ def google_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=
     return query_url
 
 
-def google_image_url_from_webpage(driver, max_number=10000, face_only=False):
+def google_image_url_from_webpage(driver, max_number=10000):
     """Extract image URLs from Google Images search results page"""
+    from urllib.parse import urlparse, parse_qs, unquote
     image_urls = []
-    image_count = 0
+    seen = set()
     scroll_count = 0
-    max_scrolls = max(30, max_number // 10)
+    max_scrolls = max(30, max_number // 5)
 
     try:
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "img"))
+            EC.presence_of_element_located((By.TAG_NAME, "a"))
         )
     except Exception:
-        pass
+        time.sleep(2)
 
-    while image_count < max_number and scroll_count < max_scrolls:
-        # Collect URLs from img elements (thumbnails)
+    while len(image_urls) < max_number and scroll_count < max_scrolls:
         try:
-            img_elements = driver.find_elements(By.TAG_NAME, "img")
-            for img in img_elements:
-                src = img.get_attribute("src") or img.get_attribute("data-src") or ""
-                if (src.startswith("http") and
-                        "gstatic.com" not in src and
-                        "googlelogo" not in src and
-                        src not in image_urls):
-                    image_urls.append(src)
-                    image_count += 1
-                    if image_count >= max_number:
-                        break
+            # Extract full image URLs from anchor hrefs containing imgurl= parameter
+            anchors = driver.find_elements(By.CSS_SELECTOR, "a[href*='imgurl=']")
+            for anchor in anchors:
+                href = anchor.get_attribute("href") or ""
+                if "imgurl=" not in href:
+                    continue
+                # Parse the imgurl parameter out
+                try:
+                    parsed = urlparse(href)
+                    params = parse_qs(parsed.query)
+                    img_url = params.get("imgurl", [None])[0]
+                    if img_url and img_url not in seen:
+                        seen.add(img_url)
+                        image_urls.append(unquote(img_url))
+                        if len(image_urls) >= max_number:
+                            break
+                except Exception:
+                    continue
         except Exception as e:
-            logging.error("Error collecting image URLs: %s", e)
+            logging.error("Error collecting Google image URLs: %s", e)
 
-        # Scroll down to load more
         driver.execute_script("window.scrollBy(0, 1000);")
-        time.sleep(0.5)
+        time.sleep(0.8)
         scroll_count += 1
 
     return image_urls
@@ -146,22 +152,24 @@ def bing_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=No
     return query_url
 
 
-def bing_image_url_from_webpage(driver):
+def bing_image_url_from_webpage(driver, max_number=10000):
     """Extract image URLs from Bing Images search results page"""
     image_urls = []
     image_elements = []
     img_count = 0
+    scroll_count = 0
+    max_scrolls = max(50, max_number // 5)
 
-    # Wait for initial page load instead of unconditional sleep
+    # Wait for Bing's actual result containers (class iusc)
     try:
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "img"))
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".iusc"))
         )
     except Exception:
         time.sleep(2)  # fallback
 
     # Scroll and load more images until no more are available
-    while True:
+    while img_count < max_number and scroll_count < max_scrolls:
         try:
             image_elements = driver.find_elements(By.CLASS_NAME, "iusc")
             if len(image_elements) > img_count:
@@ -178,6 +186,7 @@ def bing_image_url_from_webpage(driver):
         except Exception as e:
             logging.error("Error while scrolling: %s", e)
             break
+        scroll_count += 1
 
     # Extract image URLs from JSON data
     for image_element in image_elements:
@@ -329,9 +338,9 @@ def crawl_image_urls(keywords, engine="Google", max_number=10000,
             
             # Extract image URLs based on engine
             if engine == "Google":
-                image_urls = google_image_url_from_webpage(driver, max_number, quiet)
+                image_urls = google_image_url_from_webpage(driver, max_number)
             elif engine == "Bing":
-                image_urls = bing_image_url_from_webpage(driver)
+                image_urls = bing_image_url_from_webpage(driver, max_number)
                 
             # Close browser
             driver.quit()
