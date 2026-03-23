@@ -7,7 +7,6 @@ from __future__ import print_function
 
 import re
 import time
-import sys
 import os
 import json
 import shutil
@@ -16,6 +15,8 @@ from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import requests
 from concurrent.futures import ThreadPoolExecutor
 import logging
@@ -28,9 +29,6 @@ g_headers = {
     "Accept-Encoding": "gzip, deflate, sdch",
     "Proxy-Connection": "keep-alive",
 }
-
-# Determine the bundle directory for packaged applications
-bundle_dir = getattr(sys, 'frozen', False) and sys._MEIPASS or os.path.dirname(os.path.abspath(__file__))
 
 
 def my_print(msg, quiet=False):
@@ -76,81 +74,42 @@ def google_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=
     return query_url
 
 
-def google_image_url_from_webpage(driver, max_number, quiet=False):
+def google_image_url_from_webpage(driver, max_number=10000, face_only=False):
     """Extract image URLs from Google Images search results page"""
-    thumb_elements_old = []
-    thumb_elements = []
-    
-    # Scroll and load more images until we have enough or no more are available
-    while True:
-        try:
-            thumb_elements = driver.find_elements(By.CLASS_NAME, "rg_i")
-            my_print(f"Found {len(thumb_elements)} images.", quiet)
-            
-            # Stop if we have enough images or no more are being loaded
-            if len(thumb_elements) >= max_number or len(thumb_elements) == len(thumb_elements_old):
-                break
-                
-            thumb_elements_old = thumb_elements
-            
-            # Scroll down to load more
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
-            
-            # Click "Show more" button if available
-            show_more = driver.find_elements(By.CLASS_NAME, "mye4qd")
-            if len(show_more) == 1 and show_more[0].is_displayed() and show_more[0].is_enabled():
-                my_print("Clicking 'Show more' button.", quiet)
-                show_more[0].click()
-                
-            time.sleep(3)
-        except Exception as e:
-            logging.error("Exception while scrolling: %s", e)
-    
-    if not thumb_elements:
-        return []
-
-    my_print("Clicking each thumbnail to get full image URLs...", quiet)
-
-    # Click thumbnails to load full images
-    retry_click = []
-    for i, elem in enumerate(thumb_elements):
-        try:
-            if i > 0 and i % 50 == 0:
-                my_print(f"{i} thumbnails clicked.", quiet)
-            if not elem.is_displayed() or not elem.is_enabled():
-                retry_click.append(elem)
-                continue
-            elem.click()
-        except Exception as e:
-            logging.error("Error clicking thumbnail: %s", e)
-            retry_click.append(elem)
-
-    # Retry failed clicks
-    if retry_click:    
-        my_print("Retrying failed clicks...", quiet)
-        for elem in retry_click:
-            try:
-                if elem.is_displayed() and elem.is_enabled():
-                    elem.click()
-            except Exception as e:
-                logging.error("Error during retry click: %s", e)
-    
-    # Extract image URLs
-    image_elements = driver.find_elements(By.CLASS_NAME, "islib")
     image_urls = []
-    url_pattern = r"imgurl=\S*&amp;imgrefurl"
+    image_count = 0
+    scroll_count = 0
+    max_scrolls = max(30, max_number // 10)
 
-    for image_element in image_elements[:max_number]:
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "img"))
+        )
+    except Exception:
+        pass
+
+    while image_count < max_number and scroll_count < max_scrolls:
+        # Collect URLs from img elements (thumbnails)
         try:
-            outer_html = image_element.get_attribute("outerHTML")
-            re_group = re.search(url_pattern, outer_html)
-            if re_group is not None:
-                image_url = unquote(re_group.group()[7:-14])
-                image_urls.append(image_url)
+            img_elements = driver.find_elements(By.TAG_NAME, "img")
+            for img in img_elements:
+                src = img.get_attribute("src") or img.get_attribute("data-src") or ""
+                if (src.startswith("http") and
+                        "gstatic.com" not in src and
+                        "googlelogo" not in src and
+                        src not in image_urls):
+                    image_urls.append(src)
+                    image_count += 1
+                    if image_count >= max_number:
+                        break
         except Exception as e:
-            logging.error("Error extracting URL: %s", e)
-            
+            logging.error("Error collecting image URLs: %s", e)
+
+        # Scroll down to load more
+        driver.execute_script("window.scrollBy(0, 1000);")
+        time.sleep(0.5)
+        scroll_count += 1
+
     return image_urls
 
 
@@ -181,14 +140,25 @@ def bing_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=No
     if filter_parts:
         query_url += filter_url + "+".join(filter_parts)
 
+    if safe_mode:
+        query_url += "&adlt=strict"
+
     return query_url
 
 
 def bing_image_url_from_webpage(driver):
     """Extract image URLs from Bing Images search results page"""
     image_urls = []
-    time.sleep(7)  # Initial wait for page to load
+    image_elements = []
     img_count = 0
+
+    # Wait for initial page load instead of unconditional sleep
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "img"))
+        )
+    except Exception:
+        time.sleep(2)  # fallback
 
     # Scroll and load more images until no more are available
     while True:
@@ -204,11 +174,11 @@ def bing_image_url_from_webpage(driver):
                     smb[0].click()
                 else:
                     break
-            time.sleep(2)
+            time.sleep(0.5)
         except Exception as e:
             logging.error("Error while scrolling: %s", e)
             break
-            
+
     # Extract image URLs from JSON data
     for image_element in image_elements:
         try:
@@ -217,7 +187,7 @@ def bing_image_url_from_webpage(driver):
             image_urls.append(m_json["murl"])
         except Exception as e:
             logging.error("Error extracting URL: %s", e)
-            
+
     return image_urls
 
 
@@ -307,7 +277,7 @@ def crawl_image_urls(keywords, engine="Google", max_number=10000,
     elif engine == "Bing":
         query_url = bing_gen_query_url(keywords, face_only, safe_mode, image_type, color)
     else:
-        logging.error(f"Unsupported engine: {engine}")
+        logging.error("Unsupported engine: %s", engine)
         return []
 
     my_print(f"Query URL: {query_url}", quiet)
@@ -367,7 +337,7 @@ def crawl_image_urls(keywords, engine="Google", max_number=10000,
             driver.quit()
             
         except Exception as e:
-            logging.error(f"Error during web scraping: {e}")
+            logging.error("Error during web scraping: %s", e)
             if 'driver' in locals() and driver:
                 driver.quit()
     
