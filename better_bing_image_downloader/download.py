@@ -1,6 +1,7 @@
 import shutil
 import argparse
 import logging
+from importlib.metadata import version as pkg_version, PackageNotFoundError
 from pathlib import Path
 from .bing import Bing
 from tqdm import tqdm
@@ -99,6 +100,11 @@ def downloader(
 def main():
     """Entry point for the 'bbid' CLI command."""
     parser = argparse.ArgumentParser(description='Download images using Bing.')
+    try:
+        _version = pkg_version("better-bing-image-downloader")
+    except PackageNotFoundError:
+        _version = "unknown"
+    parser.add_argument('--version', action='version', version=f'%(prog)s {_version}')
     parser.add_argument('query', type=str, help='The search query.')
     parser.add_argument('-l', '--limit', type=int, default=100, help='The maximum number of images to download.')
     parser.add_argument('-d', '--output_dir', type=str, default='dataset', help='The directory to save the images in.')

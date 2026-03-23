@@ -1,6 +1,5 @@
+# Core runtime dependencies (mirrors pyproject.toml [project.dependencies])
+# For Selenium/Google support: pip install better-bing-image-downloader[google]
 requests>=2.28.0
 tqdm>=4.60.0
 filetype>=1.2.0
-selenium>=4.0.0
-PySocks>=1.7.0
-chromedriver-autoinstaller>=0.6.0
