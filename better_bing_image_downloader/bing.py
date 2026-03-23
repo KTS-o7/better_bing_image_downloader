@@ -2,7 +2,6 @@ from pathlib import Path
 import urllib.request
 import urllib.parse
 import urllib.error
-import urllib
 import posixpath
 import re
 import logging
@@ -173,11 +172,11 @@ class Bing:
             file_path = self.output_dir / f"{self.image_name}_{index}.{file_type}"
             
             if self.verbose:
-                logging.info("[%%] Downloading Image #%d from %s", index, link)
+                logging.info("Downloading Image #%d from %s", index, link)
                 
             if self.save_image(link, file_path):
                 if self.verbose:
-                    logging.info("[%%] File #%d Downloaded!", index)
+                    logging.info("Downloaded File #%d", index)
                 return index
             return None
                 
@@ -200,9 +199,9 @@ class Bing:
                     if future.result() is not None:
                         with self._count_lock:
                             self.download_count += 1
-                        # Update progress bar with current count
+                            current_count = self.download_count
                         if self.download_callback:
-                            self.download_callback(self.download_count)
+                            self.download_callback(current_count)
                 except Exception as e:
                     logging.error("Error processing download: %s", e)
                 

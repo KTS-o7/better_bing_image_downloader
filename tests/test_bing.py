@@ -27,8 +27,9 @@ class TestBingInit(unittest.TestCase):
 
     def test_output_dir_created(self):
         import os
-        b = Bing("cats", 10, self.tmp, "off", 10)
-        self.assertTrue(os.path.isdir(self.tmp))
+        new_subdir = os.path.join(self.tmp, "new_subdir", "nested")
+        b = Bing("cats", 10, new_subdir, "off", 10)
+        self.assertTrue(os.path.isdir(new_subdir))
 
 
 class TestBingGetFilter(unittest.TestCase):
