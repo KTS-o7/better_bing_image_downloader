@@ -189,13 +189,14 @@ class Bing:
                 if existing:
                     if self.verbose:
                         logging.info("Skipping already-downloaded image #%d (file exists)", index)
-                    return index  # Count as already downloaded
+                    return 0  # 0 = skipped (file exists), not None = not an error
             
             if self.verbose:
                 logging.info("Downloading Image #%d from %s", index, link)
                 
             if self.save_image(link, file_path):
-                self.manifest[file_path.name] = link
+                with self._count_lock:
+                    self.manifest[file_path.name] = link
                 if self.verbose:
                     logging.info("Downloaded File #%d", index)
                 return index
@@ -217,12 +218,14 @@ class Bing:
             # Process each future as it completes
             for future in as_completed(futures):
                 try:
-                    if future.result() is not None:
+                    result = future.result()
+                    if result is not None and result > 0:  # positive = newly downloaded
                         with self._count_lock:
                             self.download_count += 1
                             current_count = self.download_count
                         if self.download_callback:
                             self.download_callback(current_count)
+                    # result == 0 means skipped (existing file); None means error
                 except Exception as e:
                     logging.error("Error processing download: %s", e)
                 
@@ -289,7 +292,8 @@ class Bing:
                     for link in links_to_download:
                         if self.download_count >= self.limit:
                             break
-                        if self.download_image(link, self.download_count + 1) is not None:
+                        result = self.download_image(link, self.download_count + 1)
+                        if result is not None and result > 0:  # positive = newly downloaded
                             self.download_count += 1
                             # Update progress bar
                             if self.download_callback:

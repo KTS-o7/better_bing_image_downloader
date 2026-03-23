@@ -94,20 +94,24 @@ def downloader(
         )
         # Type annotation is ignored in runtime
         bing.download_callback = update_progress_bar  # type: ignore
-        bing.run()
-
-    # Write manifest JSON (merge with existing if present)
-    manifest_path = image_dir / "_manifest.json"
-    existing_manifest = {}
-    if manifest_path.exists():
         try:
-            with open(manifest_path) as f:
-                existing_manifest = json.load(f)
-        except Exception:
-            pass
-    existing_manifest.update(bing.manifest)
-    with open(manifest_path, 'w') as f:
-        json.dump(existing_manifest, f, indent=2)
+            bing.run()
+        finally:
+            # Always write manifest, even if run() raised
+            manifest_path = image_dir / "_manifest.json"
+            existing_manifest = {}
+            if manifest_path.exists():
+                try:
+                    with open(manifest_path) as f:
+                        existing_manifest = json.load(f)
+                except Exception:
+                    pass
+            existing_manifest.update(bing.manifest)
+            try:
+                with open(manifest_path, 'w') as f:
+                    json.dump(existing_manifest, f, indent=2)
+            except Exception as e:
+                logging.error("Failed to write manifest: %s", e)
 
     return bing.download_count
 

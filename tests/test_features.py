@@ -1,6 +1,4 @@
 import json
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pytest
@@ -10,7 +8,7 @@ from better_bing_image_downloader.download import downloader
 
 class TestResumeSupport:
     def test_skip_existing_file_returns_index(self, tmp_path):
-        """If Image_1.jpg already exists, download_image should skip and return the index without re-downloading"""
+        """If Image_1.jpg already exists, download_image should skip and return 0 (skipped sentinel)"""
         b = Bing("cats", 10, str(tmp_path), "off", 10)
         (tmp_path / "Image_1.jpg").write_bytes(b"fake content")
         
@@ -18,7 +16,7 @@ class TestResumeSupport:
             result = b.download_image("https://example.com/img.jpg", 1)
         
         mock_save.assert_not_called()
-        assert result == 1
+        assert result == 0  # 0 = skipped (file exists), not None = not an error
 
     def test_force_replace_does_not_skip_existing(self, tmp_path):
         """With force_replace=True, even existing files should be re-downloaded"""
