@@ -1,5 +1,6 @@
 import shutil
 import argparse
+import json
 import logging
 from importlib.metadata import version as pkg_version, PackageNotFoundError
 from pathlib import Path
@@ -88,11 +89,25 @@ def downloader(
             verbose=verbose, 
             badsites=badsites, 
             name=name,
-            max_workers=max_workers
+            max_workers=max_workers,
+            force_replace=force_replace
         )
         # Type annotation is ignored in runtime
         bing.download_callback = update_progress_bar  # type: ignore
         bing.run()
+
+    # Write manifest JSON (merge with existing if present)
+    manifest_path = image_dir / "_manifest.json"
+    existing_manifest = {}
+    if manifest_path.exists():
+        try:
+            with open(manifest_path) as f:
+                existing_manifest = json.load(f)
+        except Exception:
+            pass
+    existing_manifest.update(bing.manifest)
+    with open(manifest_path, 'w') as f:
+        json.dump(existing_manifest, f, indent=2)
 
     return bing.download_count
 

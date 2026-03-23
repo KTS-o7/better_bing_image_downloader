@@ -6,6 +6,7 @@ import posixpath
 import re
 import logging
 import threading
+import hashlib
 from tqdm import tqdm
 import filetype
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -84,7 +85,7 @@ class Bing:
         return : None
         
     """
-    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=None, name='Image', max_workers=4):
+    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=None, name='Image', max_workers=4, force_replace=False):
         assert isinstance(limit, int), "limit must be integer"
         assert isinstance(timeout, int), "timeout must be integer"
         assert isinstance(max_workers, int), "max_workers must be integer"
@@ -104,6 +105,10 @@ class Bing:
         self.download_count = 0
         self.download_callback = None
         self._count_lock = threading.Lock()
+        self.force_replace = force_replace
+        self.manifest: dict = {}  # filename → source URL
+        self._file_hashes: set = set()
+        self._hash_lock = threading.Lock()
         
         # Standard headers for HTTP requests
         self.headers = {
@@ -145,7 +150,14 @@ class Bing:
             if not kind or not kind.mime.startswith('image/'):
                 logging.error('Invalid image, not saving %s', link)
                 return False
-                
+
+            file_hash = hashlib.md5(image).hexdigest()
+            with self._hash_lock:
+                if file_hash in self._file_hashes:
+                    logging.info("Duplicate image detected (hash match), skipping: %s", link)
+                    return False
+                self._file_hashes.add(file_hash)
+
             file_path.write_bytes(image)
             return True
             
@@ -170,11 +182,20 @@ class Bing:
                 
             # Create output filename
             file_path = self.output_dir / f"{self.image_name}_{index}.{file_type}"
+
+            # Resume support: skip if a file with this base name already exists
+            if not self.force_replace:
+                existing = list(self.output_dir.glob(f"{self.image_name}_{index}.*"))
+                if existing:
+                    if self.verbose:
+                        logging.info("Skipping already-downloaded image #%d (file exists)", index)
+                    return index  # Count as already downloaded
             
             if self.verbose:
                 logging.info("Downloading Image #%d from %s", index, link)
                 
             if self.save_image(link, file_path):
+                self.manifest[file_path.name] = link
                 if self.verbose:
                     logging.info("Downloaded File #%d", index)
                 return index
