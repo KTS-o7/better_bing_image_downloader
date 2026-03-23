@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from better_bing_image_downloader.utils import resolve_dependencies, gen_valid_dir_name_for_keywords
 
 
@@ -8,8 +10,19 @@ def test_resolve_dependencies_non_chrome_always_passes():
 
 
 def test_resolve_dependencies_default_does_not_crash():
-    # default is firefox_headless, should return True without needing chromedriver
-    assert resolve_dependencies() is True
+    # Non-chrome driver, no chromedriver needed
+    assert resolve_dependencies("firefox_headless") is True
+
+
+def test_resolve_dependencies_chrome_calls_installer():
+    import sys
+    from unittest.mock import MagicMock
+    fake_installer = MagicMock()
+    fake_installer.install.return_value = '/path/to/driver'
+    with patch.dict(sys.modules, {'chromedriver_autoinstaller': fake_installer}):
+        result = resolve_dependencies("chrome_headless")
+    # Should return True when installer returns a path
+    assert result is True
 
 
 def test_gen_valid_dir_name_spaces():
@@ -21,3 +34,4 @@ def test_gen_valid_dir_name_spaces():
 def test_gen_valid_dir_name_special_chars():
     result = gen_valid_dir_name_for_keywords("cats:dogs")
     assert ":" not in result
+    assert result == "cats-dogs"  # colon maps to dash per the implementation

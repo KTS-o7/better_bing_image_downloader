@@ -67,7 +67,7 @@ def gen_keywords_list_from_file(filepath):
     with open(filepath, "r", encoding="utf-8") as f:
         return f.readlines()
 
-def resolve_dependencies(driver: str = "firefox_headless") -> bool:
+def resolve_dependencies(driver: str = "chrome_headless") -> bool:
     if "chrome" in driver:
         import chromedriver_autoinstaller
         print("Checking Google Chrome and chromedriver ...")
