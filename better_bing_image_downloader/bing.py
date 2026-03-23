@@ -1,9 +1,12 @@
 from pathlib import Path
 import urllib.request
+import urllib.parse
+import urllib.error
 import urllib
 import posixpath
 import re
 import logging
+import threading
 from tqdm import tqdm
 import filetype
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -82,7 +85,7 @@ class Bing:
         return : None
         
     """
-    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=[], name='Image', max_workers=4):
+    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=None, name='Image', max_workers=4):
         assert isinstance(limit, int), "limit must be integer"
         assert isinstance(timeout, int), "timeout must be integer"
         assert isinstance(max_workers, int), "max_workers must be integer"
@@ -93,7 +96,7 @@ class Bing:
         self.adult = adult
         self.filter = filter
         self.verbose = verbose
-        self.badsites = set(badsites)
+        self.badsites = set(badsites) if badsites is not None else set()
         self.image_name = name
         self.timeout = timeout
         self.max_workers = max(1, min(max_workers, 16))  # Limit between 1 and 16
@@ -101,6 +104,7 @@ class Bing:
         self.seen = set()
         self.download_count = 0
         self.download_callback = None
+        self._count_lock = threading.Lock()
         
         # Standard headers for HTTP requests
         self.headers = {
@@ -169,11 +173,11 @@ class Bing:
             file_path = self.output_dir / f"{self.image_name}_{index}.{file_type}"
             
             if self.verbose:
-                print(f"[%] Downloading Image #{index} from {link}")
+                logging.info("[%%] Downloading Image #%d from %s", index, link)
                 
             if self.save_image(link, file_path):
                 if self.verbose:
-                    print(f"[%] File #{index} Downloaded!\n")
+                    logging.info("[%%] File #%d Downloaded!", index)
                 return index
             return None
                 
@@ -194,12 +198,13 @@ class Bing:
             for future in as_completed(futures):
                 try:
                     if future.result() is not None:
-                        self.download_count += 1
+                        with self._count_lock:
+                            self.download_count += 1
                         # Update progress bar with current count
                         if self.download_callback:
                             self.download_callback(self.download_count)
                 except Exception as e:
-                    logging.error(f"Error processing download: {e}")
+                    logging.error("Error processing download: %s", e)
                 
         return self.download_count - total_before
 
@@ -224,7 +229,7 @@ class Bing:
                 )
                 
                 request = urllib.request.Request(request_url, None, headers=self.headers)
-                with urllib.request.urlopen(request) as response:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
                     html = response.read().decode('utf8')
                 
                 if not html:
