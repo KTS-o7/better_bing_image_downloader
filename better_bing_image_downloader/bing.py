@@ -102,7 +102,8 @@ class Bing:
         self.max_workers = max(1, min(max_workers, 16))  # Limit between 1 and 16
         
         self.seen = set()
-        self.download_count = 0
+        self.download_count = 0  # newly downloaded this run
+        self._slots_used = 0     # slots consumed (downloaded + skipped existing)
         self.download_callback = None
         self._count_lock = threading.Lock()
         self.force_replace = force_replace
@@ -219,13 +220,18 @@ class Bing:
             for future in as_completed(futures):
                 try:
                     result = future.result()
-                    if result is not None and result > 0:  # positive = newly downloaded
-                        with self._count_lock:
-                            self.download_count += 1
-                            current_count = self.download_count
-                        if self.download_callback:
-                            self.download_callback(current_count)
-                    # result == 0 means skipped (existing file); None means error
+                    if result is not None:
+                        if result > 0:  # positive = newly downloaded
+                            with self._count_lock:
+                                self.download_count += 1
+                                self._slots_used += 1
+                                current_count = self.download_count
+                            if self.download_callback:
+                                self.download_callback(current_count)
+                        elif result == 0:  # skipped existing file
+                            with self._count_lock:
+                                self._slots_used += 1
+                    # None = error, don't count
                 except Exception as e:
                     logging.error("Error processing download: %s", e)
                 
@@ -234,7 +240,7 @@ class Bing:
     def run(self):
         """Run the image download process"""
         page_counter = 0
-        while self.download_count < self.limit:
+        while self._slots_used < self.limit:
             if self.verbose:
                 logging.info('\n\n[!]Indexing page: %d\n', page_counter + 1)
                 
@@ -278,29 +284,33 @@ class Bing:
                 # Add all links to seen set to avoid duplicates
                 self.seen.update(filtered_links)
                 
-                # Calculate how many more images we need to download
-                remaining = self.limit - self.download_count
+                # Calculate how many more slots we need to fill
+                remaining = self.limit - self._slots_used
                 links_to_download = filtered_links[:remaining]
                 
                 # Download images in parallel
                 if self.max_workers > 1:
-                    downloaded = self.download_images_parallel(links_to_download)
-                    if downloaded == 0:
+                    slots_before = self._slots_used
+                    self.download_images_parallel(links_to_download)
+                    if self._slots_used == slots_before:
                         logging.warning("No images could be downloaded from this page")
                 else:
                     # Sequential download if max_workers=1
                     for link in links_to_download:
-                        if self.download_count >= self.limit:
+                        if self._slots_used >= self.limit:
                             break
-                        result = self.download_image(link, self.download_count + 1)
-                        if result is not None and result > 0:  # positive = newly downloaded
-                            self.download_count += 1
-                            # Update progress bar
-                            if self.download_callback:
-                                self.download_callback(self.download_count)
+                        result = self.download_image(link, self._slots_used + 1)
+                        if result is not None:
+                            if result > 0:  # newly downloaded
+                                self.download_count += 1
+                                self._slots_used += 1
+                                if self.download_callback:
+                                    self.download_callback(self.download_count)
+                            elif result == 0:  # skipped existing
+                                self._slots_used += 1
 
-                # Check if we've reached the download limit
-                if self.download_count >= self.limit:
+                # Check if we've filled all slots
+                if self._slots_used >= self.limit:
                     break
 
                 page_counter += 1
