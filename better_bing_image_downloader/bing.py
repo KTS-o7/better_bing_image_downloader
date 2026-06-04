@@ -86,7 +86,7 @@ class Bing:
         return : None
         
     """
-    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=None, name='Image', max_workers=4, force_replace=False):
+    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=None, name='Image', max_workers=4, force_replace=False, mkt='en-US'):
         assert isinstance(limit, int), "limit must be integer"
         assert isinstance(timeout, int), "timeout must be integer"
         assert isinstance(max_workers, int), "max_workers must be integer"
@@ -101,6 +101,7 @@ class Bing:
         self.image_name = name
         self.timeout = timeout
         self.max_workers = max(1, min(max_workers, 16))  # Limit between 1 and 16
+        self.mkt = mkt
         
         self.seen = set()
         self.download_count = 0  # newly downloaded this run
@@ -258,6 +259,7 @@ class Bing:
                     + '&first=' + str(page_counter * page_size)
                     + '&count=' + str(page_size)
                     + '&adlt=' + self.adult
+                    + '&mkt=' + urllib.parse.quote_plus(self.mkt)
                     + '&qft=' + ('' if self.filter is None else self.get_filter(self.filter))
                 )
                 

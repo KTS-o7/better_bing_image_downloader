@@ -12,7 +12,7 @@ def downloader(
     query: str,
     limit: int = 100,
     output_dir: str = 'dataset',
-    adult_filter_off: bool = True,
+    adult_filter_off: bool = False,
     force_replace: bool = False,
     timeout: int = 60,
     image_filter: str = "",
@@ -20,6 +20,7 @@ def downloader(
     badsites: list = None,  # type: ignore[assignment]
     name: str = 'Image',
     max_workers: int = 4,
+    mkt: str = 'en-US',
     **kwargs  # backward compat
 ) -> int:
     """
@@ -29,7 +30,7 @@ def downloader(
     query (str): The search query.
     limit (int): The maximum number of images to download.
     output_dir (str): The directory to save the images in.
-    adult_filter_off (bool): Whether to turn off the adult filter.
+    adult_filter_off (bool): Whether to turn off the adult filter. Defaults to False (filter ON, moderate safe search).
     force_replace (bool): Whether to replace existing files.
     timeout (int): The timeout for the image download.
     image_filter (str): The filter to apply to the search results.
@@ -37,6 +38,7 @@ def downloader(
     badsites (list): List of bad sites to be excluded.
     name (str): The name of the images.
     max_workers (int): Maximum number of parallel download workers (default: 4).
+    mkt (str): Bing market code for language/region of results (default: 'en-US').
     """
     # Backward compatibility: accept old 'filter' keyword arg
     if 'filter' in kwargs:
@@ -49,7 +51,9 @@ def downloader(
         image_filter = kwargs.pop('filter')
 
     # Set adult filter setting
-    adult = 'off' if adult_filter_off else 'on'
+    # adult_filter_off=False (default) → 'moderate' (Bing's recommended safe search)
+    # adult_filter_off=True            → 'off'      (no filtering)
+    adult = 'off' if adult_filter_off else 'moderate'
 
     # Resolve mutable default
     badsites = badsites or []
@@ -90,7 +94,8 @@ def downloader(
             badsites=badsites, 
             name=name,
             max_workers=max_workers,
-            force_replace=force_replace
+            force_replace=force_replace,
+            mkt=mkt
         )
         # Type annotation is ignored in runtime
         bing.download_callback = update_progress_bar  # type: ignore
@@ -135,6 +140,7 @@ def main():
     parser.add_argument('-b', '--bad-sites', nargs='*', default=[], help='List of bad sites to be excluded.')
     parser.add_argument('-n', '--name', type=str, default='Image', help='The name of the images.')
     parser.add_argument('-w', '--workers', type=int, default=4, help='Maximum number of parallel download workers.')
+    parser.add_argument('-m', '--mkt', type=str, default='en-US', help='Bing market code for language/region of results (e.g. en-US, de-DE). Default: en-US.')
 
     args = parser.parse_args()
     logging_level = logging.INFO if args.verbose else logging.WARNING
@@ -151,7 +157,8 @@ def main():
         args.verbose,
         args.bad_sites,
         args.name,
-        args.workers
+        args.workers,
+        args.mkt
     )
 
 
