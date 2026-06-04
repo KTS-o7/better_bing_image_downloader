@@ -1,10 +1,7 @@
 """Tests for atomic-write and reliability behavior in the base engine."""
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import pytest
+import os
+from unittest.mock import MagicMock, patch
 
 from better_bing_image_downloader.bing import Bing
 
@@ -12,8 +9,8 @@ from better_bing_image_downloader.bing import Bing
 class TestAtomicWrite:
     """``save_image`` must leave no partial files on failure."""
 
-    @patch("better_bing_image_downloader.bing.filetype.guess")
-    @patch("better_bing_image_downloader.bing.urllib.request.urlopen")
+    @patch("better_bing_image_downloader.base.filetype.guess")
+    @patch("better_bing_image_downloader.base.urllib.request.urlopen")
     def test_save_image_writes_atomically(self, mock_urlopen, mock_filetype, tmp_path):
         """A successful save produces the target file and no leftover temp file."""
         fake_image = b"\xff\xd8\xff" * 50
@@ -35,9 +32,11 @@ class TestAtomicWrite:
         leftover = [p for p in os.listdir(tmp_path) if p.startswith(".") and p != "." and p != ".."]
         assert leftover == [], f"Leftover temp files: {leftover}"
 
-    @patch("better_bing_image_downloader.bing.filetype.guess")
-    @patch("better_bing_image_downloader.bing.urllib.request.urlopen")
-    def test_save_image_no_partial_file_on_write_failure(self, mock_urlopen, mock_filetype, tmp_path):
+    @patch("better_bing_image_downloader.base.filetype.guess")
+    @patch("better_bing_image_downloader.base.urllib.request.urlopen")
+    def test_save_image_no_partial_file_on_write_failure(
+        self, mock_urlopen, mock_filetype, tmp_path
+    ):
         """If writing the temp file fails, no partial file should be left behind."""
         import urllib.error
 
@@ -51,9 +50,11 @@ class TestAtomicWrite:
         leftover = [p for p in os.listdir(tmp_path) if p.startswith(".")]
         assert leftover == [], f"Leftover temp files: {leftover}"
 
-    @patch("better_bing_image_downloader.bing.filetype.guess")
-    @patch("better_bing_image_downloader.bing.urllib.request.urlopen")
-    def test_save_image_no_partial_file_on_invalid_image(self, mock_urlopen, mock_filetype, tmp_path):
+    @patch("better_bing_image_downloader.base.filetype.guess")
+    @patch("better_bing_image_downloader.base.urllib.request.urlopen")
+    def test_save_image_no_partial_file_on_invalid_image(
+        self, mock_urlopen, mock_filetype, tmp_path
+    ):
         """If the response is not an image, no file should be written."""
         mock_response = MagicMock()
         mock_response.read.return_value = b"<html>not an image</html>"

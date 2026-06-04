@@ -1,7 +1,6 @@
 import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import MagicMock, patch
+
 from better_bing_image_downloader.bing import Bing
 from better_bing_image_downloader.download import downloader
 
@@ -11,10 +10,10 @@ class TestResumeSupport:
         """If Image_1.jpg already exists, download_image should skip and return 0 (skipped sentinel)"""
         b = Bing("cats", 10, str(tmp_path), "off", 10)
         (tmp_path / "Image_1.jpg").write_bytes(b"fake content")
-        
-        with patch.object(b, 'save_image') as mock_save:
+
+        with patch.object(b, "save_image") as mock_save:
             result = b.download_image("https://example.com/img.jpg", 1)
-        
+
         mock_save.assert_not_called()
         assert result == 0  # 0 = skipped (file exists), not None = not an error
 
@@ -22,26 +21,26 @@ class TestResumeSupport:
         """With force_replace=True, even existing files should be re-downloaded"""
         b = Bing("cats", 10, str(tmp_path), "off", 10, force_replace=True)
         (tmp_path / "Image_1.jpg").write_bytes(b"old content")
-        
-        with patch.object(b, 'save_image', return_value=True):
+
+        with patch.object(b, "save_image", return_value=True):
             result = b.download_image("https://example.com/img.jpg", 1)
-        
+
         assert result == 1
 
     def test_no_skip_when_force_replace_false_and_no_existing_file(self, tmp_path):
         """When file doesn't exist, download normally"""
         b = Bing("cats", 10, str(tmp_path), "off", 10, force_replace=False)
-        
-        with patch.object(b, 'save_image', return_value=True):
+
+        with patch.object(b, "save_image", return_value=True):
             result = b.download_image("https://example.com/img.jpg", 1)
-        
+
         assert result == 1
 
 
 class TestManifest:
     def test_manifest_written_after_downloader_run(self, tmp_path):
         """downloader() should write _manifest.json after a run"""
-        with patch('better_bing_image_downloader.download.Bing') as MockBing:
+        with patch("better_bing_image_downloader.download.Bing") as MockBing:
             mock_instance = MagicMock()
             mock_instance.download_count = 1
             mock_instance.seen = {"http://example.com/img.jpg"}
@@ -62,7 +61,7 @@ class TestManifest:
         existing_manifest = {"Image_1.jpg": "http://example.com/1.jpg"}
         (query_dir / "_manifest.json").write_text(json.dumps(existing_manifest))
 
-        with patch('better_bing_image_downloader.download.Bing') as MockBing:
+        with patch("better_bing_image_downloader.download.Bing") as MockBing:
             mock_instance = MagicMock()
             mock_instance.download_count = 1
             mock_instance.seen = {"http://example.com/2.jpg"}
@@ -79,17 +78,18 @@ class TestDeduplication:
     def test_duplicate_md5_not_saved_twice(self, tmp_path):
         """Two save_image calls with the same bytes should only save the first"""
         b = Bing("cats", 10, str(tmp_path), "off", 10)
-        fake_image = b'\xff\xd8\xff' * 100
+        fake_image = b"\xff\xd8\xff" * 100
 
-        with patch('better_bing_image_downloader.bing.urllib.request.urlopen') as mock_open, \
-             patch('better_bing_image_downloader.bing.filetype.guess') as mock_ft:
+        with patch("better_bing_image_downloader.base.urllib.request.urlopen") as mock_open, patch(
+            "better_bing_image_downloader.base.filetype.guess"
+        ) as mock_ft:
             mock_response = MagicMock()
             mock_response.read.return_value = fake_image
             mock_response.__enter__ = lambda s: s
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_open.return_value = mock_response
             mock_kind = MagicMock()
-            mock_kind.mime = 'image/jpeg'
+            mock_kind.mime = "image/jpeg"
             mock_ft.return_value = mock_kind
 
             r1 = b.save_image("https://example.com/img1.jpg", tmp_path / "img1.jpg")
@@ -102,10 +102,11 @@ class TestDeduplication:
         """Two save_image calls with different bytes should both be saved"""
         b = Bing("cats", 10, str(tmp_path), "off", 10)
 
-        with patch('better_bing_image_downloader.bing.urllib.request.urlopen') as mock_open, \
-             patch('better_bing_image_downloader.bing.filetype.guess') as mock_ft:
+        with patch("better_bing_image_downloader.base.urllib.request.urlopen") as mock_open, patch(
+            "better_bing_image_downloader.base.filetype.guess"
+        ) as mock_ft:
             mock_kind = MagicMock()
-            mock_kind.mime = 'image/jpeg'
+            mock_kind.mime = "image/jpeg"
             mock_ft.return_value = mock_kind
 
             def make_response(content):
@@ -116,8 +117,8 @@ class TestDeduplication:
                 return r
 
             mock_open.side_effect = [
-                make_response(b'\xff\xd8\xff' + b'A' * 100),
-                make_response(b'\xff\xd8\xff' + b'B' * 100),
+                make_response(b"\xff\xd8\xff" + b"A" * 100),
+                make_response(b"\xff\xd8\xff" + b"B" * 100),
             ]
 
             r1 = b.save_image("https://example.com/img1.jpg", tmp_path / "img1.jpg")

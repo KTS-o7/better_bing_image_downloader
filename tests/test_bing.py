@@ -1,8 +1,9 @@
-import unittest
 import tempfile
 import threading
-from unittest.mock import patch, MagicMock
+import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 from better_bing_image_downloader.bing import Bing
 
 
@@ -27,8 +28,9 @@ class TestBingInit(unittest.TestCase):
 
     def test_output_dir_created(self):
         import os
+
         new_subdir = os.path.join(self.tmp, "new_subdir", "nested")
-        b = Bing("cats", 10, new_subdir, "off", 10)
+        Bing("cats", 10, new_subdir, "off", 10)
         self.assertTrue(os.path.isdir(new_subdir))
 
 
@@ -68,10 +70,10 @@ class TestBingSaveImage(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
 
-    @patch('better_bing_image_downloader.bing.urllib.request.urlopen')
-    @patch('better_bing_image_downloader.bing.filetype.guess')
+    @patch("better_bing_image_downloader.base.urllib.request.urlopen")
+    @patch("better_bing_image_downloader.base.filetype.guess")
     def test_save_image_success_returns_true(self, mock_filetype, mock_urlopen):
-        fake_image = b'\xff\xd8\xff' * 10
+        fake_image = b"\xff\xd8\xff" * 10
         mock_response = MagicMock()
         mock_response.read.return_value = fake_image
         mock_response.__enter__ = lambda s: s
@@ -79,7 +81,7 @@ class TestBingSaveImage(unittest.TestCase):
         mock_urlopen.return_value = mock_response
 
         mock_kind = MagicMock()
-        mock_kind.mime = 'image/jpeg'
+        mock_kind.mime = "image/jpeg"
         mock_filetype.return_value = mock_kind
 
         b = Bing("cats", 10, self.tmp, "off", 10)
@@ -87,11 +89,11 @@ class TestBingSaveImage(unittest.TestCase):
         result = b.save_image("https://example.com/image.jpg", file_path)
         self.assertTrue(result)
 
-    @patch('better_bing_image_downloader.bing.urllib.request.urlopen')
-    @patch('better_bing_image_downloader.bing.filetype.guess')
+    @patch("better_bing_image_downloader.base.urllib.request.urlopen")
+    @patch("better_bing_image_downloader.base.filetype.guess")
     def test_save_image_rejects_non_image_returns_false(self, mock_filetype, mock_urlopen):
         mock_response = MagicMock()
-        mock_response.read.return_value = b'not an image'
+        mock_response.read.return_value = b"not an image"
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
         mock_urlopen.return_value = mock_response
@@ -102,9 +104,10 @@ class TestBingSaveImage(unittest.TestCase):
         result = b.save_image("https://example.com/file.html", file_path)
         self.assertFalse(result)
 
-    @patch('better_bing_image_downloader.bing.urllib.request.urlopen')
+    @patch("better_bing_image_downloader.base.urllib.request.urlopen")
     def test_save_image_network_error_returns_false(self, mock_urlopen):
         import urllib.error
+
         mock_urlopen.side_effect = urllib.error.URLError("connection refused")
         b = Bing("cats", 10, self.tmp, "off", 10)
         result = b.save_image("https://example.com/img.jpg", Path(self.tmp) / "img.jpg")
@@ -115,13 +118,13 @@ class TestBingDownloadImage(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
 
-    @patch.object(Bing, 'save_image', return_value=True)
+    @patch.object(Bing, "save_image", return_value=True)
     def test_download_image_returns_index_on_success(self, mock_save):
         b = Bing("cats", 10, self.tmp, "off", 10)
         result = b.download_image("https://example.com/img.jpg", 5)
         self.assertEqual(result, 5)
 
-    @patch.object(Bing, 'save_image', return_value=False)
+    @patch.object(Bing, "save_image", return_value=False)
     def test_download_image_returns_none_on_failure(self, mock_save):
         b = Bing("cats", 10, self.tmp, "off", 10)
         result = b.download_image("https://example.com/img.jpg", 5)
@@ -129,6 +132,7 @@ class TestBingDownloadImage(unittest.TestCase):
 
     def test_download_image_signature_has_index_param(self):
         import inspect
+
         b = Bing("cats", 10, self.tmp, "off", 10)
         sig = inspect.signature(b.download_image)
         self.assertIn("index", sig.parameters)
@@ -140,9 +144,9 @@ class TestBingCountLock(unittest.TestCase):
 
     def test_count_lock_exists(self):
         b = Bing("cats", 10, self.tmp, "off", 10)
-        self.assertTrue(hasattr(b, '_count_lock'))
+        self.assertTrue(hasattr(b, "_count_lock"))
         self.assertIsInstance(b._count_lock, type(threading.Lock()))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

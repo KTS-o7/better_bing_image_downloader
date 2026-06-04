@@ -5,6 +5,7 @@ JSON, vqd tokens tied to cookies), so most tests mock the HTTP layer.
 One optional end-to-end test is gated on the ``BBID_RUN_NETWORK_TESTS``
 environment variable; set it to ``1`` to run it.
 """
+
 import gzip
 import json
 import os
@@ -12,7 +13,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from better_bing_image_downloader import duckduckgo
 from better_bing_image_downloader.duckduckgo import DuckDuckGo
 
 
@@ -47,7 +47,7 @@ class TestDuckDuckGoInit:
 class TestDuckDuckGoFetchVqd:
     @patch.object(DuckDuckGo, "_get")
     def test_vqd_extracted_from_html(self, mock_get, tmp_path):
-        html = b'<html><body>vqd=\'4-12345678901234567890123456789012345678\';</body></html>'
+        html = b"<html><body>vqd='4-12345678901234567890123456789012345678';</body></html>"
         mock_get.return_value = (html, "")
         b = DuckDuckGo("cats", 10, str(tmp_path))
         vqd = b._fetch_vqd()
@@ -154,11 +154,13 @@ class TestDuckDuckGoRun:
         we have to replicate that side effect in the mock or the
         assertions on ``download_count``/``_slots_used`` will fail.
         """
+
         def fake(link, index):
             with b._count_lock:
                 b.download_count += 1
                 b._slots_used += 1
             return index
+
         mock_dl.side_effect = fake
 
     @patch.object(DuckDuckGo, "_fetch_vqd", return_value="vqd")
