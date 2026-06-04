@@ -15,23 +15,20 @@
 # author: Krishnatejaswi S
 # Email: shentharkrishnatejaswi@gmail.com
 
-from __future__ import print_function
 
-import re
-import time
-import os
 import json
+import logging
+import re
 import shutil
+import time
 from urllib.parse import quote
-from pathlib import Path
+
+import requests
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import requests
-from concurrent.futures import ThreadPoolExecutor
-import logging
+from selenium.webdriver.support.ui import WebDriverWait
 
 # Default headers for HTTP requests
 g_headers = {
@@ -54,10 +51,10 @@ def google_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=
     base_url = "https://www.google.com/search?tbm=isch&hl=en"
     keywords_str = "&q=" + quote(keywords)
     query_url = base_url + keywords_str
-    
+
     # Add safe search parameter
     query_url += "&safe=" + ("on" if safe_mode else "off")
-    
+
     # Build filter URL
     filter_url = "&tbs="
     filter_parts = []
@@ -68,13 +65,13 @@ def google_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=
             filter_parts.append("ic:gray")
         else:
             filter_parts.append(f"ic:specific,isc:{color.lower()}")
-    
+
     # Add image type filter
     if image_type is not None:
         if image_type.lower() == "linedrawing":
             image_type = "lineart"
         filter_parts.append(f"itp:{image_type}")
-        
+
     # Add face filter
     if face_only:
         filter_parts.append("itp:face")
@@ -82,22 +79,21 @@ def google_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=
     # Combine all filter parts
     if filter_parts:
         query_url += filter_url + ",".join(filter_parts)
-        
+
     return query_url
 
 
 def google_image_url_from_webpage(driver, max_number=10000):
     """Extract image URLs from Google Images search results page"""
-    from urllib.parse import urlparse, parse_qs, unquote
+    from urllib.parse import parse_qs, unquote, urlparse
+
     image_urls = []
     seen = set()
     scroll_count = 0
     max_scrolls = max(30, max_number // 5)
 
     try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "a"))
-        )
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "a")))
     except Exception:
         time.sleep(2)
 
@@ -138,15 +134,15 @@ def bing_gen_query_url(keywords, face_only=False, safe_mode=False, image_type=No
     query_url = base_url + keywords_str
     filter_url = "&qft="
     filter_parts = []
-    
+
     # Add face filter
     if face_only:
         filter_parts.append("filterui:face-face")
-    
+
     # Add image type filter
     if image_type is not None:
         filter_parts.append(f"filterui:photo-{image_type}")
-    
+
     # Add color filter
     if color is not None:
         if color in ["bw", "color"]:
@@ -174,9 +170,7 @@ def bing_image_url_from_webpage(driver, max_number=10000):
 
     # Wait for Bing's actual result containers (class iusc)
     try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".iusc"))
-        )
+        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".iusc")))
     except Exception:
         time.sleep(2)  # fallback
 
@@ -212,57 +206,67 @@ def bing_image_url_from_webpage(driver, max_number=10000):
     return image_urls
 
 
-def bing_get_image_url_using_api(keywords, max_number=10000, face_only=False,
-                                 proxy=None, proxy_type=None):
+def bing_get_image_url_using_api(
+    keywords, max_number=10000, face_only=False, proxy=None, proxy_type=None
+):
     """Get image URLs from Bing using API requests instead of browser"""
     # Setup proxies if provided
     proxies = None
     if proxy and proxy_type:
         proxies = {
             "http": f"{proxy_type}://{proxy}",
-            "https": f"{proxy_type}://{proxy}"
+            "https": f"{proxy_type}://{proxy}",
         }
-    
+
     start = 1
     image_urls = []
     last_url = None
-    
+
     # Fetch image URLs in batches
     while start <= max_number:
         try:
-            url = f'https://www.bing.com/images/async?q={quote(keywords)}&first={start}&count=35'
+            url = f"https://www.bing.com/images/async?q={quote(keywords)}&first={start}&count=35"
             res = requests.get(url, proxies=proxies, headers=g_headers, timeout=30)
             res.raise_for_status()  # Raise exception for HTTP errors
             res.encoding = "utf-8"
-            
+
             # Extract image URLs using regex
-            image_urls_batch = re.findall('murl&quot;:&quot;(.*?)&quot;', res.text)
-            
+            image_urls_batch = re.findall("murl&quot;:&quot;(.*?)&quot;", res.text)
+
             # Break if no new images or we've seen the last URL before
             if not image_urls_batch or (image_urls and image_urls_batch[-1] == last_url):
                 break
-                
+
             last_url = image_urls_batch[-1]
             image_urls.extend(image_urls_batch)
             start += len(image_urls_batch)
-            
+
             # Optional delay to be nice to the server
             time.sleep(0.5)
-            
+
         except requests.exceptions.RequestException as e:
             logging.error("Error fetching image URLs: %s", e)
             break
-            
+
     return image_urls[:max_number]
 
 
-def crawl_image_urls(keywords, engine="Google", max_number=10000,
-                     face_only=False, safe_mode=False, proxy=None, 
-                     proxy_type="http", quiet=False, browser="chrome_headless", 
-                     image_type=None, color=None):
+def crawl_image_urls(
+    keywords,
+    engine="Google",
+    max_number=10000,
+    face_only=False,
+    safe_mode=False,
+    proxy=None,
+    proxy_type="http",
+    quiet=False,
+    browser="chrome_headless",
+    image_type=None,
+    color=None,
+):
     """
     Scrape image urls from search engines
-    
+
     Args:
         keywords: keywords you want to search
         engine: search engine used to search images
@@ -274,21 +278,21 @@ def crawl_image_urls(keywords, engine="Google", max_number=10000,
         browser: browser to use when crawl image urls
         image_type: type of images to search for
         color: color filter for images
-        
+
     Returns:
         list of scraped image urls
     """
     engine = engine.capitalize()
-    
+
     my_print(f"\nScraping From {engine} Image Search ...\n", quiet)
     my_print(f"Keywords: {keywords}", quiet)
-    
+
     if max_number <= 0:
         my_print("Number: No limit", quiet)
         max_number = 10000
     else:
         my_print(f"Number: {max_number}", quiet)
-        
+
     my_print(f"Face Only: {face_only}", quiet)
     my_print(f"Safe Mode: {safe_mode}", quiet)
 
@@ -308,20 +312,23 @@ def crawl_image_urls(keywords, engine="Google", max_number=10000,
     if browser == "api":
         if engine == "Bing":
             image_urls = bing_get_image_url_using_api(
-                keywords, max_number=max_number, face_only=face_only,
-                proxy=proxy, proxy_type=proxy_type
+                keywords,
+                max_number=max_number,
+                face_only=face_only,
+                proxy=proxy,
+                proxy_type=proxy_type,
             )
         else:
             my_print(f"Engine {engine} is not supported on API mode.")
             return []
-    
+
     # Use browser automation approach
     else:
         try:
             # Setup appropriate browser
             browser = browser.lower()
             driver = None
-            
+
             if "firefox" in browser:
                 firefox_path = shutil.which("geckodriver")
                 firefox_options = webdriver.FirefoxOptions()
@@ -340,30 +347,33 @@ def crawl_image_urls(keywords, engine="Google", max_number=10000,
                     chrome_options.add_argument(f"--proxy-server={proxy_type}://{proxy}")
                 service = Service(executable_path=chrome_path)
                 driver = webdriver.Chrome(service=service, options=chrome_options)
-                
+
             if not driver:
                 raise ValueError("Failed to initialize WebDriver")
-                
+
             # Set window size and load URL
             driver.set_window_size(1920, 1080)
             driver.get(query_url)
-            
+
             # Extract image URLs based on engine
             if engine == "Google":
                 image_urls = google_image_url_from_webpage(driver, max_number)
             elif engine == "Bing":
                 image_urls = bing_image_url_from_webpage(driver, max_number)
-                
+
             # Close browser
             driver.quit()
-            
+
         except Exception as e:
             logging.error("Error during web scraping: %s", e)
-            if 'driver' in locals() and driver:
+            if "driver" in locals() and driver:
                 driver.quit()
-    
+
     # Limit number of results if needed
     output_num = min(max_number, len(image_urls))
-    my_print(f"\n== {output_num} out of {len(image_urls)} crawled image URLs will be used.\n", quiet)
+    my_print(
+        f"\n== {output_num} out of {len(image_urls)} crawled image URLs will be used.\n",
+        quiet,
+    )
 
     return image_urls[:output_num]

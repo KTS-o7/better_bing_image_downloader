@@ -2,6 +2,7 @@
 
 Used by the optional Selenium-based ``multidownloader`` path.
 """
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -52,21 +53,25 @@ def download_image(
     """
     proxies = None
     if proxy_type is not None and proxy is not None:
-        proxies = {"http": f"{proxy_type}://{proxy}", "https": f"{proxy_type}://{proxy}"}
+        proxies = {
+            "http": f"{proxy_type}://{proxy}",
+            "https": f"{proxy_type}://{proxy}",
+        }
 
     for attempt in range(1, 4):  # 3 total attempts
         try:
-            response = requests.get(
-                image_url, headers=_HEADERS, timeout=timeout, proxies=proxies
-            )
+            response = requests.get(image_url, headers=_HEADERS, timeout=timeout, proxies=proxies)
             response.raise_for_status()
             break
         except Exception as e:
             if attempt < 3:
-                wait = 2 ** attempt  # 2s, 4s
+                wait = 2**attempt  # 2s, 4s
                 logging.warning(
                     "download_image: %s failed (attempt %d/3): %s. Retrying in %ds.",
-                    image_url, attempt, e, wait,
+                    image_url,
+                    attempt,
+                    e,
+                    wait,
                 )
                 time.sleep(wait)
                 continue
@@ -113,8 +118,13 @@ def download_images(
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = [
             executor.submit(
-                download_image, url, dst_dir,
-                f"{file_prefix}_{i:04d}", timeout, proxy_type, proxy,
+                download_image,
+                url,
+                dst_dir,
+                f"{file_prefix}_{i:04d}",
+                timeout,
+                proxy_type,
+                proxy,
             )
             for i, url in enumerate(image_urls)
         ]

@@ -4,6 +4,7 @@ Bing and DuckDuckGo differ only in how they fetch the list of image URLs;
 the download, validation, deduplication, resume, and progress logic is
 identical. That logic lives here.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -27,8 +28,16 @@ MAX_FUTURE_TIMEOUT = 180.0  # seconds
 # Extensions we accept when renaming downloaded images. Bing sometimes
 # returns URLs without an extension, so we use this set for the fallback.
 VALID_IMAGE_EXTENSIONS = {
-    "jpe", "jpeg", "jfif", "exif", "tiff",
-    "gif", "bmp", "png", "webp", "jpg",
+    "jpe",
+    "jpeg",
+    "jfif",
+    "exif",
+    "tiff",
+    "gif",
+    "bmp",
+    "png",
+    "webp",
+    "jpg",
 }
 
 _USER_AGENT = (
@@ -40,8 +49,7 @@ _USER_AGENT = (
 DEFAULT_HEADERS = {
     "User-Agent": _USER_AGENT,
     "Accept": (
-        "text/html,application/xhtml+xml,application/xml;q=0.9,"
-        "image/avif,image/webp,*/*;q=0.8"
+        "text/html,application/xhtml+xml,application/xml;q=0.9," "image/avif,image/webp,*/*;q=0.8"
     ),
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate",
@@ -85,7 +93,7 @@ class ImageEngine:
 
         self.seen: set[str] = set()
         self.download_count = 0  # newly downloaded this run
-        self._slots_used = 0     # slots consumed (downloaded + skipped existing)
+        self._slots_used = 0  # slots consumed (downloaded + skipped existing)
         self.download_callback = None
         self._count_lock = threading.Lock()
         self.manifest: dict = {}  # filename -> source URL
@@ -103,7 +111,8 @@ class ImageEngine:
             merged.update(headers)
         request = urllib.request.Request(url, None, headers=merged)
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            return response.read()
+            data: bytes = response.read()
+            return data
 
     # --- Download pipeline ---
 

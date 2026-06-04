@@ -15,6 +15,7 @@ We use a :class:`http.cookiejar.CookieJar` so the session-cookie set on
 the initial fetch is replayed to ``i.js`` (otherwise ``i.js`` returns
 ``403 Forbidden``).
 """
+
 from __future__ import annotations
 
 import gzip
@@ -28,13 +29,14 @@ import urllib.parse
 import urllib.request
 
 try:
-    import brotli  # type: ignore
+    import brotli
+
     _HAS_BROTLI = True
 except ImportError:  # pragma: no cover
-    brotli = None  # type: ignore
+    brotli = None
     _HAS_BROTLI = False
 
-from .base import ImageEngine, MAX_FUTURE_TIMEOUT
+from .base import MAX_FUTURE_TIMEOUT, ImageEngine
 
 __all__ = ["DuckDuckGo"]
 
@@ -136,11 +138,16 @@ class DuckDuckGo(ImageEngine):
         if encoding == "br":
             if not _HAS_BROTLI:  # pragma: no cover
                 raise ImportError(_BROTLI_MISSING_MSG)
-            return brotli.decompress(raw).decode("utf8", errors="replace")
+            decompressed: bytes = brotli.decompress(raw)
+            return decompressed.decode("utf8", errors="replace")
         return raw.decode("utf8", errors="replace")
 
-    def _get(self, url: str, referer: str | None = None) -> bytes:
-        """GET a URL with the standard browser-like headers."""
+    def _get(self, url: str, referer: str | None = None) -> tuple[bytes, str]:
+        """GET a URL with the standard browser-like headers.
+
+        Returns the raw response body and the ``Content-Encoding`` header
+        value (which may be empty for uncompressed responses).
+        """
         headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -179,11 +186,15 @@ class DuckDuckGo(ImageEngine):
     def _fetch_page(self, vqd: str, offset: int) -> list[str]:
         """Fetch a single page of image URLs from ``i.js``."""
         url = (
-            "https://duckduckgo.com/i.js?q=" + urllib.parse.quote_plus(self.query)
-            + "&o=json&p=1&s=" + str(offset)
+            "https://duckduckgo.com/i.js?q="
+            + urllib.parse.quote_plus(self.query)
+            + "&o=json&p=1&s="
+            + str(offset)
             + "&f=,,,,"
-            + "&l=" + urllib.parse.quote_plus(self.region)
-            + "&vqd=" + urllib.parse.quote_plus(vqd)
+            + "&l="
+            + urllib.parse.quote_plus(self.region)
+            + "&vqd="
+            + urllib.parse.quote_plus(vqd)
         )
         # i.js must be requested as XHR
         opener_with_xhr = urllib.request.build_opener(
@@ -218,14 +229,8 @@ class DuckDuckGo(ImageEngine):
         try:
             data = json.loads(text)
         except json.JSONDecodeError as e:
-            raise RuntimeError(
-                f"Failed to parse DuckDuckGo i.js response as JSON: {e}"
-            ) from e
-        return [
-            r["image"]
-            for r in data.get("results", [])
-            if r.get("image")
-        ]
+            raise RuntimeError(f"Failed to parse DuckDuckGo i.js response as JSON: {e}") from e
+        return [r["image"] for r in data.get("results", []) if r.get("image")]
 
     # --- Main loop ---
 
@@ -265,7 +270,8 @@ class DuckDuckGo(ImageEngine):
                 wait = self._consume_backoff()
                 logging.error(
                     "Network error from DuckDuckGo: %s. Retrying in %.1fs.",
-                    e, wait,
+                    e,
+                    wait,
                 )
                 time.sleep(wait)
                 continue
@@ -281,9 +287,9 @@ class DuckDuckGo(ImageEngine):
 
             # Filter seen/badsites
             filtered = [
-                link for link in links
-                if link not in self.seen
-                and not any(badsite in link for badsite in self.badsites)
+                link
+                for link in links
+                if link not in self.seen and not any(badsite in link for badsite in self.badsites)
             ]
             self.seen.update(links)
 
@@ -305,9 +311,7 @@ class DuckDuckGo(ImageEngine):
             offset += self.PAGE_SIZE
             page_num += 1
 
-        logging.info(
-            "\n\n[%%] Done. Downloaded %d images.", self.download_count
-        )
+        logging.info("\n\n[%%] Done. Downloaded %d images.", self.download_count)
 
     def _download_batch(self, links: list[str], start_index: int) -> None:
         """Download a batch of links starting at ``start_index``.
@@ -319,6 +323,7 @@ class DuckDuckGo(ImageEngine):
             return
         if self.max_workers > 1:
             from concurrent.futures import ThreadPoolExecutor, as_completed
+
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = [
                     executor.submit(self.download_image, link, i)

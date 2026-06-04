@@ -1,4 +1,5 @@
 import logging
+
 from .bing import Bing
 from .download import downloader
 
@@ -11,6 +12,7 @@ __all__ = ["Bing", "downloader"]
 # install without brotli.
 try:
     from .duckduckgo import DuckDuckGo  # noqa: F401
+
     __all__.append("DuckDuckGo")
 except ImportError:  # pragma: no cover
     pass

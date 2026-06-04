@@ -1,4 +1,5 @@
 """Public downloader API and CLI entry point."""
+
 from __future__ import annotations
 
 import argparse
@@ -6,7 +7,8 @@ import json
 import logging
 import shutil
 import warnings
-from importlib.metadata import PackageNotFoundError, version as pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from tqdm import tqdm
@@ -16,9 +18,23 @@ from .bing import Bing
 __all__ = ["downloader", "main"]
 
 
-def _build_engine(engine, query, limit, output_dir, image_filter, timeout, verbose,
-                  badsites, name, max_workers, force_replace, adult,
-                  ddg_safe_search, ddg_region, mkt):
+def _build_engine(
+    engine,
+    query,
+    limit,
+    output_dir,
+    image_filter,
+    timeout,
+    verbose,
+    badsites,
+    name,
+    max_workers,
+    force_replace,
+    adult,
+    ddg_safe_search,
+    ddg_region,
+    mkt,
+):
     """Instantiate the requested engine.
 
     Raises
@@ -46,6 +62,7 @@ def _build_engine(engine, query, limit, output_dir, image_filter, timeout, verbo
     if engine == "duckduckgo":
         # Imported lazily so the Bing path doesn't require brotli.
         from .duckduckgo import DuckDuckGo
+
         return DuckDuckGo(
             query=query,
             limit=limit,
@@ -59,9 +76,7 @@ def _build_engine(engine, query, limit, output_dir, image_filter, timeout, verbo
             safe_search=ddg_safe_search,
             region=ddg_region,
         )
-    raise ValueError(
-        f"Unknown engine {engine!r}. Must be 'bing' or 'duckduckgo'."
-    )
+    raise ValueError(f"Unknown engine {engine!r}. Must be 'bing' or 'duckduckgo'.")
 
 
 def downloader(
@@ -135,13 +150,11 @@ def downloader(
         image_filter = kwargs.pop("filter")
 
     if engine not in ("bing", "duckduckgo"):
-        raise ValueError(
-            f"engine must be 'bing' or 'duckduckgo', got {engine!r}"
-        )
+        raise ValueError(f"engine must be 'bing' or 'duckduckgo', got {engine!r}")
 
     # Bing-specific options silently ignored when using DuckDuckGo
     if engine == "duckduckgo" and verbose:
-        for ignored in ("mkt", "image_filter", "adult_filter_off"):
+        for _ignored in ("mkt", "image_filter", "adult_filter_off"):
             pass  # silently ignore, no warning for now
 
     # Set adult filter setting (Bing only)
@@ -162,12 +175,15 @@ def downloader(
     logging.info("Downloading Images to %s", image_dir)
 
     with tqdm(
-        total=limit, unit="img", ncols=100, colour="green",
+        total=limit,
+        unit="img",
+        ncols=100,
+        colour="green",
         bar_format=(
-            "{l_bar}{bar} {n_fmt}/{total_fmt} imgs "
-            "| Speed: {rate_fmt} | ETA: {remaining}"
+            "{l_bar}{bar} {n_fmt}/{total_fmt} imgs " "| Speed: {rate_fmt} | ETA: {remaining}"
         ),
     ) as pbar:
+
         def update_progress_bar(download_count: int) -> None:
             pbar.n = download_count
             pbar.refresh()
@@ -189,7 +205,7 @@ def downloader(
             ddg_region=ddg_region,
             mkt=mkt,
         )
-        engine_obj.download_callback = update_progress_bar  # type: ignore[attr-defined]
+        engine_obj.download_callback = update_progress_bar
         try:
             engine_obj.run()
         finally:
@@ -208,50 +224,105 @@ def downloader(
             except Exception as e:
                 logging.error("Failed to write manifest: %s", e)
 
-    return engine_obj.download_count
+    return int(engine_obj.download_count)
 
 
 def main() -> None:
     """Entry point for the ``bbid`` CLI command."""
-    parser = argparse.ArgumentParser(
-        description="Download images using Bing or DuckDuckGo."
-    )
+    parser = argparse.ArgumentParser(description="Download images using Bing or DuckDuckGo.")
     try:
         _version = pkg_version("better-bing-image-downloader")
     except PackageNotFoundError:
         _version = "unknown"
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version}")
     parser.add_argument("query", type=str, help="The search query.")
-    parser.add_argument("-l", "--limit", type=int, default=100,
-                        help="The maximum number of images to download.")
-    parser.add_argument("-d", "--output_dir", type=str, default="dataset",
-                        help="The directory to save the images in.")
-    parser.add_argument("-a", "--adult_filter_off", action="store_true",
-                        help="Turn off the adult filter (Bing only).")
-    parser.add_argument("-F", "--force_replace", action="store_true",
-                        help="Re-download and replace existing files.")
-    parser.add_argument("-t", "--timeout", type=int, default=60,
-                        help="Per-request timeout in seconds.")
-    parser.add_argument("-f", "--filter", type=str, default="", dest="image_filter",
-                        help="Bing image-type filter (photo, clipart, line, gif, transparent).")
-    parser.add_argument("-v", "--verbose", action="store_true",
-                        help="Print detailed output.")
-    parser.add_argument("-b", "--bad-sites", nargs="*", default=[],
-                        help="Hostnames to exclude from results.")
-    parser.add_argument("-n", "--name", type=str, default="Image",
-                        help="Base name for downloaded images.")
-    parser.add_argument("-w", "--workers", type=int, default=4,
-                        help="Maximum number of parallel download workers.")
-    parser.add_argument("-m", "--mkt", type=str, default="en-US",
-                        help="Bing market code (e.g. en-US, de-DE). Bing only.")
-    parser.add_argument("-e", "--engine", type=str, default="bing",
-                        choices=["bing", "duckduckgo"],
-                        help="Search engine to use (default: bing).")
-    parser.add_argument("--ddg-safe-search", type=str, default="moderate",
-                        choices=["strict", "moderate", "off"],
-                        help="DuckDuckGo safe-search mode (default: moderate).")
-    parser.add_argument("--ddg-region", type=str, default="us-en",
-                        help="DuckDuckGo region code (default: us-en).")
+    parser.add_argument(
+        "-l",
+        "--limit",
+        type=int,
+        default=100,
+        help="The maximum number of images to download.",
+    )
+    parser.add_argument(
+        "-d",
+        "--output_dir",
+        type=str,
+        default="dataset",
+        help="The directory to save the images in.",
+    )
+    parser.add_argument(
+        "-a",
+        "--adult_filter_off",
+        action="store_true",
+        help="Turn off the adult filter (Bing only).",
+    )
+    parser.add_argument(
+        "-F",
+        "--force_replace",
+        action="store_true",
+        help="Re-download and replace existing files.",
+    )
+    parser.add_argument(
+        "-t", "--timeout", type=int, default=60, help="Per-request timeout in seconds."
+    )
+    parser.add_argument(
+        "-f",
+        "--filter",
+        type=str,
+        default="",
+        dest="image_filter",
+        help="Bing image-type filter (photo, clipart, line, gif, transparent).",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Print detailed output.")
+    parser.add_argument(
+        "-b",
+        "--bad-sites",
+        nargs="*",
+        default=[],
+        help="Hostnames to exclude from results.",
+    )
+    parser.add_argument(
+        "-n",
+        "--name",
+        type=str,
+        default="Image",
+        help="Base name for downloaded images.",
+    )
+    parser.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default=4,
+        help="Maximum number of parallel download workers.",
+    )
+    parser.add_argument(
+        "-m",
+        "--mkt",
+        type=str,
+        default="en-US",
+        help="Bing market code (e.g. en-US, de-DE). Bing only.",
+    )
+    parser.add_argument(
+        "-e",
+        "--engine",
+        type=str,
+        default="bing",
+        choices=["bing", "duckduckgo"],
+        help="Search engine to use (default: bing).",
+    )
+    parser.add_argument(
+        "--ddg-safe-search",
+        type=str,
+        default="moderate",
+        choices=["strict", "moderate", "off"],
+        help="DuckDuckGo safe-search mode (default: moderate).",
+    )
+    parser.add_argument(
+        "--ddg-region",
+        type=str,
+        default="us-en",
+        help="DuckDuckGo region code (default: us-en).",
+    )
 
     args = parser.parse_args()
     logging.basicConfig(

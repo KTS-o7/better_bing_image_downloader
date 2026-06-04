@@ -3,26 +3,19 @@
 Original Author: Guru Prasad (g.gaurav541@gmail.com)
 Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com)
 """
+
 from __future__ import annotations
 
 import gzip
-import hashlib
 import logging
-import posixpath
 import re
-import tempfile
-import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
-import filetype
-from tqdm import tqdm
-
-from .base import ImageEngine, MAX_FUTURE_TIMEOUT
+from .base import MAX_FUTURE_TIMEOUT, ImageEngine
 
 __all__ = ["Bing"]
 
@@ -112,9 +105,7 @@ class Bing(ImageEngine):
             "Referer": "https://www.bing.com/",
         }
         if self.badsites and self.verbose:
-            logging.info(
-                "Download links will not include: %s", ", ".join(self.badsites)
-            )
+            logging.info("Download links will not include: %s", ", ".join(self.badsites))
 
     def get_filter(self, shorthand: str) -> str:
         """Convert filter shorthand to a Bing ``+filterui:`` string."""
@@ -138,18 +129,24 @@ class Bing(ImageEngine):
         request_url = (
             "https://www.bing.com/images/async?q="
             + urllib.parse.quote_plus(self.query)
-            + "&first=" + str(page_counter * self.PAGE_SIZE)
-            + "&count=" + str(self.PAGE_SIZE)
-            + "&adlt=" + self.adult
-            + "&mkt=" + urllib.parse.quote_plus(self.mkt)
-            + "&qft=" + ("" if self.filter is None else self.get_filter(self.filter))
+            + "&first="
+            + str(page_counter * self.PAGE_SIZE)
+            + "&count="
+            + str(self.PAGE_SIZE)
+            + "&adlt="
+            + self.adult
+            + "&mkt="
+            + urllib.parse.quote_plus(self.mkt)
+            + "&qft="
+            + ("" if self.filter is None else self.get_filter(self.filter))
         )
         request = urllib.request.Request(request_url, None, headers=self.headers)
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            raw = response.read()
+            raw: bytes = response.read()
             content_encoding = response.headers.get("Content-Encoding", "")
         if content_encoding == "gzip":
-            return gzip.decompress(raw).decode("utf8")
+            decompressed: bytes = gzip.decompress(raw)
+            return decompressed.decode("utf8")
         return raw.decode("utf8", errors="replace")
 
     @staticmethod
@@ -168,8 +165,7 @@ class Bing(ImageEngine):
             except (urllib.error.HTTPError, urllib.error.URLError) as e:
                 wait = self._consume_backoff()
                 logging.error(
-                    "Network error while requesting from Bing: %s. "
-                    "Retrying in %.1fs.",
+                    "Network error while requesting from Bing: %s. " "Retrying in %.1fs.",
                     e,
                     wait,
                 )
@@ -195,8 +191,7 @@ class Bing(ImageEngine):
             filtered_links = [
                 link
                 for link in links
-                if link not in self.seen
-                and not any(badsite in link for badsite in self.badsites)
+                if link not in self.seen and not any(badsite in link for badsite in self.badsites)
             ]
             if not filtered_links:
                 logging.info("[%%] No new images are available")
@@ -218,9 +213,7 @@ class Bing(ImageEngine):
             page_counter += 1
             self._reset_backoff()
 
-        logging.info(
-            "\n\n[%%] Done. Downloaded %d images.", self.download_count
-        )
+        logging.info("\n\n[%%] Done. Downloaded %d images.", self.download_count)
 
     # --- Internal helpers used by ``run`` and the parallel executor ---
 
