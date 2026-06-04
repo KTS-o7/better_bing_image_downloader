@@ -1,4 +1,16 @@
-""" Crawl image urls from image search engine. """
+"""Crawl image URLs from image search engines.
+
+.. deprecated::
+    The Google crawler path is no longer functional: Google now serves
+    a JavaScript-only shell page to all non-browser HTTP requests, so
+    no image URLs can be extracted without a headless browser.
+    Use :func:`better_bing_image_downloader.downloader` with
+    ``engine="bing"`` or ``engine="duckduckgo"`` instead.
+
+    The Bing path in this module is also legacy; prefer
+    :class:`better_bing_image_downloader.bing.Bing`. This module will
+    be removed in v4.0.0.
+"""
 
 # author: Krishnatejaswi S
 # Email: shentharkrishnatejaswi@gmail.com

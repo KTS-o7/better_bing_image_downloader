@@ -1,23 +1,52 @@
 # author: Krishnatejaswi S
 # Email: shentharkrishnatejaswi@gmail.com
+"""
+Deprecated Selenium-based CLI for Google/Bing image scraping.
 
-from __future__ import print_function
+.. deprecated::
+    The Google path no longer works: Google serves a JavaScript-only
+    shell to all non-browser HTTP requests, so this crawler cannot
+    extract image URLs without a real browser.  Use
+    :func:`better_bing_image_downloader.downloader` with
+    ``engine="bing"`` or ``engine="duckduckgo"`` instead.
+
+    This module will be removed in v4.0.0.
+"""
+from __future__ import annotations
 
 import argparse
 import sys
+import warnings
 
 from . import crawler
 from . import helperdownload
 from . import utils
 
-def main(argv):
-    parser = argparse.ArgumentParser(description="Image helperdownload")
+
+def main(argv: list[str] | None = None) -> None:
+    warnings.warn(
+        "better_bing_image_downloader.multidownloader is deprecated and will "
+        "be removed in v4.0.0. The Google path no longer works (Google returns "
+        "a JS-only shell to automated requests). Use bbid --engine duckduckgo "
+        "or bbid --engine bing instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    parser = argparse.ArgumentParser(
+        description=(
+            "[DEPRECATED] Selenium-based image helper. "
+            "Use bbid --engine bing or bbid --engine duckduckgo."
+        )
+    )
     parser.add_argument("keywords", type=str,
                         help='Keywords to search. ("in quotes")')
     parser.add_argument("--engine", "-e", type=str, default="Bing",
-                        help="Image search engine.", choices=["Google", "Bing"])
+                        help="Image search engine.",
+                        choices=["Google", "Bing"])
     parser.add_argument("--driver", "-d", type=str, default="firefox_headless",
-                        help="Image search engine.", choices=["chrome_headless", "chrome", "api", "firefox", "firefox_headless"])
+                        help="Image search engine.",
+                        choices=["chrome_headless", "chrome", "api",
+                                 "firefox", "firefox_headless"])
     parser.add_argument("--max-number", "-n", type=int, default=100,
                         help="Max number of images download for the keywords.")
     parser.add_argument("--num-threads", "-j", type=int, default=50,
@@ -34,14 +63,11 @@ def main(argv):
                         help="Set http proxy (e.g. 192.168.0.2:8080)")
     parser.add_argument("--proxy_socks5", "-ps", type=str, default=None,
                         help="Set socks5 proxy (e.g. 192.168.0.2:1080)")
-    # type is not supported for Baidu
     parser.add_argument("--type", "-ty", type=str, default=None,
-                        help="What kinds of images to download.", choices=["clipart", "linedrawing", "photograph"])
-    # Bing: color for colored images, bw for black&white images, other color contains Red, orange, yellow, green
-    # Teal, Blue, Purple, Pink, Brown, Black, Gray, White
-    # Google: bw, red, orange, yellow, green, teal, blue, purple, pink, white, gray, black, brown
+                        help="What kinds of images to download.",
+                        choices=["clipart", "linedrawing", "photograph"])
     parser.add_argument("--color", "-cl", type=str, default=None,
-                        help="Specify the color of desired images.") 
+                        help="Specify the color of desired images.")
 
     args = parser.parse_args(args=argv)
 
@@ -58,18 +84,28 @@ def main(argv):
         print("Dependencies not resolved, exit.")
         return
 
-    crawled_urls = crawler.crawl_image_urls(args.keywords,
-                                            engine=args.engine, max_number=args.max_number,
-                                            face_only=args.face_only, safe_mode=args.safe_mode,
-                                            proxy_type=proxy_type, proxy=proxy,
-                                            browser=args.driver, image_type=args.type, color=args.color)
-    helperdownload.download_images(image_urls=crawled_urls, dst_dir=args.output,
-                               concurrency=args.num_threads, timeout=args.timeout,
-                               proxy_type=proxy_type, proxy=proxy,
-                               file_prefix=args.engine)
+    if args.engine == "Google":
+        warnings.warn(
+            "The Google engine no longer works without a headless browser. "
+            "Use --engine Bing or the new bbid --engine duckduckgo CLI.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
+    crawled_urls = crawler.crawl_image_urls(
+        args.keywords, engine=args.engine, max_number=args.max_number,
+        face_only=args.face_only, safe_mode=args.safe_mode,
+        proxy_type=proxy_type, proxy=proxy,
+        browser=args.driver, image_type=args.type, color=args.color,
+    )
+    helperdownload.download_images(
+        image_urls=crawled_urls, dst_dir=args.output,
+        concurrency=args.num_threads, timeout=args.timeout,
+        proxy_type=proxy_type, proxy=proxy,
+        file_prefix=args.engine,
+    )
     print("Finished.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(sys.argv[1:])
