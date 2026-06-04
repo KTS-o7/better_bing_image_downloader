@@ -1,139 +1,123 @@
-from pathlib import Path
-import urllib.request
-import urllib.parse
-import urllib.error
+"""Bing image search scraper.
+
+Original Author: Guru Prasad (g.gaurav541@gmail.com)
+Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com)
+"""
+from __future__ import annotations
+
+import gzip
+import hashlib
+import logging
 import posixpath
 import re
-import logging
+import tempfile
 import threading
-import hashlib
-import gzip
-from tqdm import tqdm
-import filetype
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
-'''
+import filetype
+from tqdm import tqdm
 
-Python api to download image form Bing.
-Origina Author: Guru Prasad (g.gaurav541@gmail.com)
-Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com) 
+from .base import ImageEngine, MAX_FUTURE_TIMEOUT
 
-'''
+__all__ = ["Bing"]
 
 
-class Bing:
-    """_summary_
-    A class to download images from Bing.
-    
-    _description_
-    This class is used to download images from Bing. It uses the Bing Image Search API to get the links of the images and then downloads the images from the links. The class can be used to download images based on a query, with a limit on the number of images to be downloaded. The images can be filtered based on the type of image (photo, clipart, line drawing, animated gif, transparent) and the adult content can be filtered as well. The images are saved in the specified output directory. The class also has the option to be verbose, which will print the progress of the download.
-    
-    _parameters_
-    
+class Bing(ImageEngine):
+    """Download images from Bing's image search API.
+
+    Parameters
+    ----------
     query : str
-        The query to be used to search for images.
+        The search query.
     limit : int
-        The number of images to be downloaded.
-    output_dir : str
-        The directory where the images are to be saved.
+        Maximum number of images to download.
+    output_dir : str | Path
+        Directory where images will be saved.
     adult : str
-        The adult content filter. Can be "off" or "on".
+        Adult content filter, ``"off"`` or ``"moderate"``.
     timeout : int
-        The time in seconds to wait for the request to Bing to be completed.
+        Per-request timeout in seconds.
     filter : str
-        The type of image to be filtered. Can be "line", "photo", "clipart", "gif", "transparent".
+        Optional Bing image-type filter shorthand
+        (``"photo"``, ``"clipart"``, ``"line"``/``"linedrawing"``,
+        ``"gif"``/``"animatedgif"``, ``"transparent"``).
     verbose : bool
-        Whether to print the progress of the download.
-    badsites : list
-        List of websites to exclude from the search results.
+        Whether to print progress information.
+    badsites : Iterable[str] | None
+        Hostnames to exclude from results.
     name : str
-        Base name for the downloaded images.
+        Base filename for downloaded images.
     max_workers : int
-        Maximum number of parallel download workers.
-        
-    _methods_
-    
-    get_filter(shorthand)
-        Returns the filter string based on the shorthand.
-        ============
-        shorthand : str
-            The shorthand for the filter. Can be "line", "photo", "clipart", "gif", "transparent".
-        ============
-        return : str
-            The filter string based on the shorthand.
-            
-    save_image(link, file_path)
-        Saves the image from the link to the file path.
-        ============
-        link : str
-            The link of the image to be saved.
-        file_path : str
-            The file path where the image is to be saved.
-        ============
-        return : None
-        
-    download_image(link)
-        Downloads the image from the link.
-        ============
-        link : str
-            The link of the image to be downloaded.
-        ============
-        return : None
-    run()
-        Runs the download of the images.
-        ============
-        return : None
-        
+        Number of parallel download workers (clamped to 1..16).
+    force_replace : bool
+        If ``True``, re-download images even if they already exist.
+    mkt : str
+        Bing market code (e.g. ``"en-US"``).
     """
-    def __init__(self, query, limit, output_dir, adult, timeout, filter='', verbose=True, badsites=None, name='Image', max_workers=4, force_replace=False, mkt='en-US'):
-        assert isinstance(limit, int), "limit must be integer"
-        assert isinstance(timeout, int), "timeout must be integer"
-        assert isinstance(max_workers, int), "max_workers must be integer"
-        
-        self.query = query
-        self.limit = limit
-        self.output_dir = Path(output_dir)
+
+    PAGE_SIZE = 35  # Bing's /images/async returns 35 results per page
+    BACKOFF_INITIAL = 2.0  # seconds
+    BACKOFF_FACTOR = 2.0
+    BACKOFF_MAX = 60.0
+
+    def __init__(
+        self,
+        query: str,
+        limit: int,
+        output_dir,
+        adult: str,
+        timeout: int,
+        filter: str = "",
+        verbose: bool = True,
+        badsites=None,
+        name: str = "Image",
+        max_workers: int = 4,
+        force_replace: bool = False,
+        mkt: str = "en-US",
+    ):
+        super().__init__(
+            query=query,
+            limit=limit,
+            output_dir=output_dir,
+            timeout=timeout,
+            verbose=verbose,
+            badsites=badsites,
+            name=name,
+            max_workers=max_workers,
+            force_replace=force_replace,
+        )
         self.adult = adult
         self.filter = filter
-        self.verbose = verbose
-        self.badsites = set(badsites) if badsites is not None else set()
-        self.image_name = name
-        self.timeout = timeout
-        self.max_workers = max(1, min(max_workers, 16))  # Limit between 1 and 16
         self.mkt = mkt
-        
-        self.seen = set()
-        self.download_count = 0  # newly downloaded this run
-        self._slots_used = 0     # slots consumed (downloaded + skipped existing)
-        self.download_callback = None
-        self._count_lock = threading.Lock()
-        self.force_replace = force_replace
-        self.manifest: dict = {}  # filename → source URL
-        self._file_hashes: set = set()
-        self._hash_lock = threading.Lock()
-        
-        # Standard headers for HTTP requests
-        # NOTE: Accept-Encoding must include gzip so Bing returns the full compressed
-        # response. Without it, Bing now returns a severely truncated page with almost
-        # no image results (only 1 vs 35+ with gzip).
+        self._backoff = self.BACKOFF_INITIAL
+        # Bing returns compressed responses; we must advertise support.
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Referer': 'https://www.bing.com/',
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/avif,image/webp,*/*;q=0.8"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
+            "Referer": "https://www.bing.com/",
         }
-        
-        # Ensure the output directory exists
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        
         if self.badsites and self.verbose:
-            logging.info("Download links will not include: %s", ', '.join(self.badsites))
+            logging.info(
+                "Download links will not include: %s", ", ".join(self.badsites)
+            )
 
-    def get_filter(self, shorthand):
-        """Convert filter shorthand to Bing filter parameter"""
+    def get_filter(self, shorthand: str) -> str:
+        """Convert filter shorthand to a Bing ``+filterui:`` string."""
         filters = {
             "line": "+filterui:photo-linedrawing",
             "linedrawing": "+filterui:photo-linedrawing",
@@ -141,197 +125,135 @@ class Bing:
             "clipart": "+filterui:photo-clipart",
             "gif": "+filterui:photo-animatedgif",
             "animatedgif": "+filterui:photo-animatedgif",
-            "transparent": "+filterui:photo-transparent"
+            "transparent": "+filterui:photo-transparent",
         }
         return filters.get(shorthand, "")
 
-    def save_image(self, link, file_path):
-        """Save image from link to file path"""
-        try:
-            request = urllib.request.Request(link, None, self.headers)
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                image = response.read()
-            
-            kind = filetype.guess(image)
-            if not kind or not kind.mime.startswith('image/'):
-                logging.error('Invalid image, not saving %s', link)
-                return False
+    def _fetch_page(self, page_counter: int) -> str:
+        """Fetch and decode a single Bing image-search page.
 
-            file_hash = hashlib.md5(image).hexdigest()
-            with self._hash_lock:
-                if file_hash in self._file_hashes:
-                    logging.info("Duplicate image detected (hash match), skipping: %s", link)
-                    return False
-                self._file_hashes.add(file_hash)
+        Returns the page HTML as a string, or an empty string if no more
+        results are available.
+        """
+        request_url = (
+            "https://www.bing.com/images/async?q="
+            + urllib.parse.quote_plus(self.query)
+            + "&first=" + str(page_counter * self.PAGE_SIZE)
+            + "&count=" + str(self.PAGE_SIZE)
+            + "&adlt=" + self.adult
+            + "&mkt=" + urllib.parse.quote_plus(self.mkt)
+            + "&qft=" + ("" if self.filter is None else self.get_filter(self.filter))
+        )
+        request = urllib.request.Request(request_url, None, headers=self.headers)
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            raw = response.read()
+            content_encoding = response.headers.get("Content-Encoding", "")
+        if content_encoding == "gzip":
+            return gzip.decompress(raw).decode("utf8")
+        return raw.decode("utf8", errors="replace")
 
-            file_path.write_bytes(image)
-            return True
-            
-        except (urllib.error.HTTPError, urllib.error.URLError) as e:
-            logging.error('Network error while saving image %s: %s', link, e)
-            return False
-        except Exception as e:
-            logging.error('Unexpected error while saving image %s: %s', link, e)
-            return False
+    @staticmethod
+    def _extract_links(html: str) -> list[str]:
+        """Extract ``murl`` image URLs from a Bing result page."""
+        return re.findall(r"murl&quot;:&quot;(.*?)&quot;", html)
 
-    def download_image(self, link, index):
-        """Download and save an image from the given link"""
-        try:
-            # Extract file extension from URL or default to jpg
-            path = urllib.parse.urlsplit(link).path
-            filename = posixpath.basename(path).split('?')[0]
-            file_type = filename.split(".")[-1].lower()
-            
-            valid_extensions = {"jpe", "jpeg", "jfif", "exif", "tiff", "gif", "bmp", "png", "webp", "jpg"}
-            if file_type not in valid_extensions:
-                file_type = "jpg"
-                
-            # Create output filename
-            file_path = self.output_dir / f"{self.image_name}_{index}.{file_type}"
-
-            # Resume support: skip if a file with this base name already exists
-            if not self.force_replace:
-                existing = list(self.output_dir.glob(f"{self.image_name}_{index}.*"))
-                if existing:
-                    if self.verbose:
-                        logging.info("Skipping already-downloaded image #%d (file exists)", index)
-                    return 0  # 0 = skipped (file exists), not None = not an error
-            
-            if self.verbose:
-                logging.info("Downloading Image #%d from %s", index, link)
-                
-            if self.save_image(link, file_path):
-                with self._count_lock:
-                    self.manifest[file_path.name] = link
-                if self.verbose:
-                    logging.info("Downloaded File #%d", index)
-                return index
-            return None
-                
-        except Exception as e:
-            logging.error('Issue getting image %s: %s', link, e)
-            return None
-
-    def download_images_parallel(self, links):
-        """Download images in parallel using ThreadPoolExecutor"""
-        total_before = self.download_count
-        
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            # Submit all tasks
-            futures = [executor.submit(self.download_image, link, i) 
-                       for i, link in enumerate(links, self.download_count + 1)]
-            
-            # Process each future as it completes
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                    if result is not None:
-                        if result > 0:  # positive = newly downloaded
-                            with self._count_lock:
-                                self.download_count += 1
-                                self._slots_used += 1
-                                current_count = self.download_count
-                            if self.download_callback:
-                                self.download_callback(current_count)
-                        elif result == 0:  # skipped existing file
-                            with self._count_lock:
-                                self._slots_used += 1
-                    # None = error, don't count
-                except Exception as e:
-                    logging.error("Error processing download: %s", e)
-                
-        return self.download_count - total_before
-
-    def run(self):
-        """Run the image download process"""
+    def run(self) -> None:
+        """Download images until ``self.limit`` is reached or pages are exhausted."""
         page_counter = 0
         while self._slots_used < self.limit:
             if self.verbose:
-                logging.info('\n\n[!]Indexing page: %d\n', page_counter + 1)
-                
-            # Parse the page source and download pics
+                logging.info("\n\n[!]Indexing page: %d\n", page_counter + 1)
             try:
-                # Bing API page size is fixed at 35
-                page_size = 35
-                request_url = (
-                    'https://www.bing.com/images/async?q='
-                    + urllib.parse.quote_plus(self.query)
-                    + '&first=' + str(page_counter * page_size)
-                    + '&count=' + str(page_size)
-                    + '&adlt=' + self.adult
-                    + '&mkt=' + urllib.parse.quote_plus(self.mkt)
-                    + '&qft=' + ('' if self.filter is None else self.get_filter(self.filter))
-                )
-                
-                request = urllib.request.Request(request_url, None, headers=self.headers)
-                with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    raw = response.read()
-                    content_encoding = response.headers.get('Content-Encoding', '')
-                    if content_encoding == 'gzip':
-                        html = gzip.decompress(raw).decode('utf8')
-                    else:
-                        html = raw.decode('utf8', errors='replace')
-                
-                if not html:
-                    logging.info("[%] No more images are available")
-                    break
-                    
-                links = re.findall('murl&quot;:&quot;(.*?)&quot;', html)
-                
-                if self.verbose:
-                    logging.info("[%%] Indexed %d Images on Page %d.", len(links), page_counter + 1)
-                    logging.info("\n===============================================\n")
-
-                # Filter links - remove bad sites and already seen links
-                filtered_links = [
-                    link for link in links 
-                    if link not in self.seen and not any(badsite in link for badsite in self.badsites)
-                ]
-                
-                if not filtered_links:
-                    logging.info("[%] No new images are available")
-                    break
-                    
-                # Add all links to seen set to avoid duplicates
-                self.seen.update(filtered_links)
-                
-                # Calculate how many more slots we need to fill
-                remaining = self.limit - self._slots_used
-                links_to_download = filtered_links[:remaining]
-                
-                # Download images in parallel
-                if self.max_workers > 1:
-                    slots_before = self._slots_used
-                    self.download_images_parallel(links_to_download)
-                    if self._slots_used == slots_before:
-                        logging.warning("No images could be downloaded from this page")
-                else:
-                    # Sequential download if max_workers=1
-                    for link in links_to_download:
-                        if self._slots_used >= self.limit:
-                            break
-                        result = self.download_image(link, self._slots_used + 1)
-                        if result is not None:
-                            if result > 0:  # newly downloaded
-                                self.download_count += 1
-                                self._slots_used += 1
-                                if self.download_callback:
-                                    self.download_callback(self.download_count)
-                            elif result == 0:  # skipped existing
-                                self._slots_used += 1
-
-                # Check if we've filled all slots
-                if self._slots_used >= self.limit:
-                    break
-
-                page_counter += 1
-                
+                html = self._fetch_page(page_counter)
             except (urllib.error.HTTPError, urllib.error.URLError) as e:
-                logging.error('Network error while requesting from Bing: %s', e)
-                # Wait a moment before retrying
-                time.sleep(2)
-            except Exception as e:
-                logging.error('Unexpected error while requesting from Bing: %s', e)
+                wait = self._consume_backoff()
+                logging.error(
+                    "Network error while requesting from Bing: %s. "
+                    "Retrying in %.1fs.",
+                    e,
+                    wait,
+                )
+                time.sleep(wait)
+                continue
+            except Exception as e:  # pragma: no cover - defensive
+                logging.error("Unexpected error while requesting from Bing: %s", e)
                 break
 
-        logging.info("\n\n[%%] Done. Downloaded %d images.", self.download_count)
+            if not html:
+                logging.info("[%%] No more images are available")
+                break
+
+            links = self._extract_links(html)
+            if self.verbose:
+                logging.info(
+                    "[%%] Indexed %d Images on Page %d.",
+                    len(links),
+                    page_counter + 1,
+                )
+                logging.info("\n===============================================\n")
+
+            filtered_links = [
+                link
+                for link in links
+                if link not in self.seen
+                and not any(badsite in link for badsite in self.badsites)
+            ]
+            if not filtered_links:
+                logging.info("[%%] No new images are available")
+                break
+            self.seen.update(filtered_links)
+
+            remaining = self.limit - self._slots_used
+            links_to_download = filtered_links[:remaining]
+            slots_before = self._slots_used
+            self._download_batch(links_to_download, start_index=self.download_count + 1)
+            if self._slots_used == slots_before:
+                logging.warning("No images could be downloaded from this page")
+                # If a page yielded no downloads, treat it as exhaustion so we
+                # don't loop forever against an empty result set.
+                break
+
+            if self._slots_used >= self.limit:
+                break
+            page_counter += 1
+            self._reset_backoff()
+
+        logging.info(
+            "\n\n[%%] Done. Downloaded %d images.", self.download_count
+        )
+
+    # --- Internal helpers used by ``run`` and the parallel executor ---
+
+    def _consume_backoff(self) -> float:
+        """Return the current backoff delay and double it for next time."""
+        wait = self._backoff
+        self._backoff = min(self._backoff * self.BACKOFF_FACTOR, self.BACKOFF_MAX)
+        return wait
+
+    def _reset_backoff(self) -> None:
+        self._backoff = self.BACKOFF_INITIAL
+
+    def _download_batch(self, links: list[str], start_index: int) -> None:
+        """Download a batch of links starting at ``start_index``.
+
+        ``ImageEngine.download_image`` updates counters itself; this method
+        just dispatches work in parallel or sequentially.
+        """
+        if not links:
+            return
+        if self.max_workers > 1:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = [
+                    executor.submit(self.download_image, link, i)
+                    for i, link in enumerate(links, start_index)
+                ]
+                for future in as_completed(futures, timeout=MAX_FUTURE_TIMEOUT):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        logging.error("Error processing download: %s", e)
+        else:
+            for i, link in enumerate(links, start_index):
+                if self._slots_used >= self.limit:
+                    break
+                self.download_image(link, i)

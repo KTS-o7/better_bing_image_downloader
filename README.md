@@ -1,6 +1,6 @@
 # Better Bing Image Downloader
 
-A fast, reliable Python library and CLI tool for bulk downloading images from Bing (and Google via Selenium).
+A fast, reliable Python library and CLI tool for bulk downloading images from Bing or DuckDuckGo.
 
 [![GitHub top language](https://img.shields.io/github/languages/top/KTS-o7/better_bing_image_downloader)](https://github.com/KTS-o7/better_bing_image_downloader)
 [![GitHub](https://img.shields.io/github/license/KTS-o7/better_bing_image_downloader)](https://github.com/KTS-o7/better_bing_image_downloader/blob/main/LICENSE)
@@ -9,29 +9,30 @@ A fast, reliable Python library and CLI tool for bulk downloading images from Bi
 
 ## Features
 
-- **Bing image search** via direct API — no browser required
-- **Parallel downloading** with configurable worker threads
+- **Two search engines, one API** — Bing (default) or DuckDuckGo, switched via a single `engine=` parameter
+- **No browser required** — both engines use plain HTTP/JSON (no Selenium, no headless Chrome)
+- **Parallel downloading** with configurable worker threads (atomic writes, no partial files)
 - **Resume support** — re-running skips already-downloaded files and fills the gap
 - **Download manifest** — `_manifest.json` written per run mapping filenames to source URLs
 - **Image deduplication** — MD5 hash check prevents saving the same image twice from different URLs
 - **Image type validation** — `filetype` library rejects non-image responses
-- **Filtering** by image type (photo, clipart, line drawing, animated gif, transparent)
+- **Filtering** by image type (photo, clipart, line drawing, animated gif, transparent) on Bing
 - **Adult content filter** control
 - **Bad sites exclusion** list
-- **Google image search** (optional, requires Selenium — see [Google support](#google-support))
 - **`bbid` CLI command** installed automatically with the package
-- **Proxy support** (HTTP and SOCKS5)
+- **Exponential backoff** on network errors with per-page retry
 - Requires Python 3.8+
 
 ## Table of Contents
 
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Search Engines](#search-engines)
 - [Python API](#python-api)
 - [CLI — bbid](#cli--bbid)
 - [Parameters](#parameters)
 - [Examples](#examples)
-- [Google Support](#google-support)
+- [Multidownloader (Deprecated)](#multidownloader-deprecated)
 - [Changelog](#changelog)
 - [Disclaimer](#disclaimer)
 - [License](#license)
@@ -42,11 +43,19 @@ A fast, reliable Python library and CLI tool for bulk downloading images from Bi
 pip install better-bing-image-downloader
 ```
 
-For **Google image search** support (installs Selenium + chromedriver):
+For **DuckDuckGo** engine support (installs the `brotli` package for response decoding):
 
 ```bash
-pip install "better-bing-image-downloader[google]"
+pip install "better-bing-image-downloader[duckduckgo]"
 ```
+
+If you want both engines in one install:
+
+```bash
+pip install "better-bing-image-downloader[duckduckgo,google]"
+```
+
+The Bing engine works out of the box with no extra dependencies. The DuckDuckGo engine requires `brotli` (used to decode DuckDuckGo's Brotli-compressed responses).
 
 ### From source
 
@@ -55,7 +64,7 @@ git clone https://github.com/KTS-o7/better_bing_image_downloader
 cd better_bing_image_downloader
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e ".[duckduckgo,dev]"
 ```
 
 ## Quick Start
@@ -63,14 +72,41 @@ pip install -e .
 ```python
 from better_bing_image_downloader import downloader
 
+# Bing (default)
 downloader("golden retriever", limit=50)
 # → downloads to ./dataset/golden retriever/
 # → writes ./dataset/golden retriever/_manifest.json
+
+# DuckDuckGo
+downloader("golden retriever", limit=50, engine="duckduckgo")
 ```
 
 ```bash
+# Bing (default)
 bbid "golden retriever" --limit 50
+
+# DuckDuckGo
+bbid "golden retriever" --limit 50 --engine duckduckgo
 ```
+
+## Search Engines
+
+### Bing (default)
+
+- Direct API access via `https://www.bing.com/images/async`
+- Supports image-type filtering: `photo`, `clipart`, `line`/`linedrawing`, `gif`/`animatedgif`, `transparent`
+- Supports market codes (`mkt`) for region-specific results
+- No additional dependencies
+
+### DuckDuckGo (new in 3.1.0)
+
+- Direct API access via `https://duckduckgo.com/i.js` (Brotli-compressed JSON)
+- No API key, no rate-limit token beyond a short-lived `vqd` cookie
+- Supports safe-search modes: `strict`, `moderate` (default), `off`
+- Supports region codes (e.g. `us-en`, `uk-en`)
+- Requires the `brotli` Python package: `pip install "better-bing-image-downloader[duckduckgo]"`
+
+DuckDuckGo is a great fallback when Bing is rate-limiting or blocking your IP, and vice versa.
 
 ## Python API
 
@@ -81,17 +117,23 @@ count = downloader(
     query="cute puppies",
     limit=100,
     output_dir="my_images",
-    adult_filter_off=True,
-    force_replace=False,       # False = resume (skip existing files)
+    engine="bing",                # "bing" (default) or "duckduckgo"
+    adult_filter_off=True,        # Bing only
+    force_replace=False,          # False = resume (skip existing files)
     timeout=60,
-    image_filter="photo",      # "line", "photo", "clipart", "gif", "transparent"
+    image_filter="photo",         # Bing only: "line", "photo", "clipart", "gif", "transparent"
     verbose=True,
     badsites=["stock.adobe.com", "shutterstock.com"],
     name="Puppy",
-    max_workers=8
+    max_workers=8,
+    mkt="en-US",                  # Bing only: market code
+    ddg_safe_search="moderate",   # DuckDuckGo only: "strict", "moderate", "off"
+    ddg_region="us-en",           # DuckDuckGo only: region code
 )
 print(f"Downloaded {count} images")
 ```
+
+The return value is the number of **newly downloaded** images (not counting files that were already on disk from a previous run).
 
 ### Resume behaviour
 
@@ -106,6 +148,9 @@ downloader("cats", limit=100, output_dir="dataset")
 
 # Third run with higher limit: skips 100 existing, downloads 50 new ones
 downloader("cats", limit=150, output_dir="dataset")
+
+# DuckDuckGo works the same way
+downloader("cats", limit=150, output_dir="dataset", engine="duckduckgo")
 ```
 
 ### Download manifest
@@ -141,11 +186,19 @@ The `bbid` command is installed automatically with the package:
 bbid --help
 bbid --version
 
-# Basic
+# Basic Bing download
 bbid "mountain landscape" --limit 100
+
+# DuckDuckGo
+bbid "mountain landscape" --limit 100 --engine duckduckgo
+
+# DuckDuckGo with safe search off and UK region
+bbid "mountain landscape" --limit 100 --engine duckduckgo \
+    --ddg-safe-search off --ddg-region uk-en
 
 # With options
 bbid "logo design" \
+  --engine bing \
   --limit 50 \
   --filter transparent \
   --workers 8 \
@@ -161,39 +214,47 @@ bbid "puppies" --limit 200 --bad-sites stock.adobe.com shutterstock.com
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
 | `query` | | (required) | Search term |
+| `--engine` | `-e` | `bing` | Search engine: `bing` or `duckduckgo` |
 | `--limit` | `-l` | 100 | Maximum images to download |
 | `--output_dir` | `-d` | `dataset` | Output directory |
-| `--adult_filter_off` | `-a` | False | Disable adult content filter |
+| `--adult_filter_off` | `-a` | False | Disable adult content filter (Bing only) |
 | `--force_replace` | `-F` | False | Delete and recreate output dir |
 | `--timeout` | `-t` | 60 | Connection timeout (seconds) |
-| `--filter` | `-f` | `""` | Image type filter |
+| `--filter` | `-f` | `""` | Image type filter (Bing only) |
 | `--verbose` | `-v` | False | Detailed output |
 | `--bad-sites` | `-b` | `[]` | Sites to exclude |
 | `--name` | `-n` | `Image` | Base filename prefix |
 | `--workers` | `-w` | 4 | Parallel download threads |
+| `--mkt` | `-m` | `en-US` | Bing market code (Bing only) |
+| `--ddg-safe-search` | | `moderate` | DuckDuckGo safe-search: `strict`, `moderate`, `off` |
+| `--ddg-region` | | `us-en` | DuckDuckGo region code |
 | `--version` | | | Show version and exit |
 
 ## Parameters
 
 ### `downloader()` API parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `query` | str | (required) | Search term |
-| `limit` | int | 100 | Maximum images to download |
-| `output_dir` | str | `'dataset'` | Root output directory |
-| `adult_filter_off` | bool | True | Disable adult content filter |
-| `force_replace` | bool | False | Delete existing dir before download |
-| `timeout` | int | 60 | Connection timeout in seconds |
-| `image_filter` | str | `""` | Image type: `line`, `photo`, `clipart`, `gif`, `transparent` |
-| `verbose` | bool | True | Print download progress |
-| `badsites` | list | `[]` | Domains to exclude |
-| `name` | str | `'Image'` | Base filename prefix |
-| `max_workers` | int | 4 | Parallel download threads (1–16) |
+| Parameter | Type | Default | Applies to | Description |
+|-----------|------|---------|------------|-------------|
+| `query` | str | (required) | both | Search term |
+| `limit` | int | 100 | both | Maximum images to download |
+| `output_dir` | str | `'dataset'` | both | Root output directory |
+| `engine` | str | `'bing'` | both | Search engine: `'bing'` or `'duckduckgo'` |
+| `adult_filter_off` | bool | False | Bing | Disable adult content filter |
+| `force_replace` | bool | False | both | Delete existing dir before download |
+| `timeout` | int | 60 | both | Connection timeout in seconds |
+| `image_filter` | str | `""` | Bing | Image type: `line`, `photo`, `clipart`, `gif`, `transparent` |
+| `verbose` | bool | True | both | Print download progress |
+| `badsites` | list | `[]` | both | Domains to exclude |
+| `name` | str | `'Image'` | both | Base filename prefix |
+| `max_workers` | int | 4 | both | Parallel download threads (1–16) |
+| `mkt` | str | `'en-US'` | Bing | Market code for language/region |
+| `ddg_safe_search` | str | `'moderate'` | DuckDuckGo | `strict`, `moderate`, or `off` |
+| `ddg_region` | str | `'us-en'` | DuckDuckGo | Region code (e.g. `us-en`, `uk-en`) |
 
 ## Examples
 
-### Download with type filter
+### Download with type filter (Bing)
 
 ```python
 from better_bing_image_downloader import downloader
@@ -204,7 +265,22 @@ downloader(
     limit=50,
     image_filter="transparent",
     max_workers=8,
-    output_dir="logos"
+    output_dir="logos",
+)
+```
+
+### Use DuckDuckGo for the same query
+
+```python
+from better_bing_image_downloader import downloader
+
+downloader(
+    query="logo design",
+    limit=50,
+    engine="duckduckgo",
+    ddg_safe_search="off",  # don't filter logos as adult content
+    max_workers=8,
+    output_dir="logos",
 )
 ```
 
@@ -215,56 +291,60 @@ downloader(
     query="nature photography",
     limit=200,
     badsites=["stock.adobe.com", "shutterstock.com", "gettyimages.com"],
-    max_workers=8
+    max_workers=8,
 )
 ```
 
-### Use from CLI with Google (requires `[google]` extra)
+### Resume a long-running download
 
-```bash
-# Download using Google image search via Firefox headless
-python -m better_bing_image_downloader.multidownloader "mountain landscape" \
-  --engine Google \
-  --driver firefox_headless \
-  --max-number 50 \
-  --type photograph
+```python
+# Run 1: start a 500-image download
+downloader("mountain landscape", limit=500, output_dir="dataset")
+
+# ... process is killed or the network drops ...
+
+# Run 2: pick up where we left off — only the missing images are fetched
+downloader("mountain landscape", limit=500, output_dir="dataset")
 ```
 
-## Google Support
+## Multidownloader (Deprecated)
 
-Google image search requires the optional Selenium dependencies:
+The Selenium-based `multidownloader` CLI is **deprecated** and will be removed in v4.0.0. The Google path no longer works: Google serves a JavaScript-only shell page to all non-browser HTTP requests, so image URLs cannot be extracted without a real browser.
 
-```bash
-pip install "better-bing-image-downloader[google]"
+For the Bing path, prefer the new `bbid` CLI or `downloader()` function with `engine="bing"`. As a DuckDuckGo alternative, install the `[duckduckgo]` extra and use `bbid --engine duckduckgo`.
+
+If you have a hard requirement on the Selenium path, you can still import it directly, but expect a `DeprecationWarning`:
+
+```python
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+from better_bing_image_downloader.multidownloader import main
+main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
-
-Then use the `multidownloader` CLI:
-
-```bash
-python -m better_bing_image_downloader.multidownloader "query" \
-  --engine Google \
-  --driver chrome_headless \
-  --max-number 100
-```
-
-### Multidownloader CLI options
-
-| Argument | Short | Default | Description |
-|----------|-------|---------|-------------|
-| `--engine` | `-e` | `Bing` | Search engine: `Google` or `Bing` |
-| `--driver` | `-d` | `firefox_headless` | Browser: `chrome_headless`, `chrome`, `firefox`, `firefox_headless`, `api` |
-| `--max-number` | `-n` | 100 | Maximum images to download |
-| `--num-threads` | `-j` | 10 | Concurrent download threads |
-| `--timeout` | `-t` | 10 | Download timeout (seconds) |
-| `--output` | `-o` | `./download_images` | Output directory |
-| `--safe-mode` | `-S` | False | Enable safe search |
-| `--face-only` | `-F` | False | Face images only |
-| `--proxy_http` | `-ph` | None | HTTP proxy (e.g. `192.168.0.2:8080`) |
-| `--proxy_socks5` | `-ps` | None | SOCKS5 proxy (e.g. `192.168.0.2:1080`) |
-| `--type` | `-ty` | None | Image type: `clipart`, `linedrawing`, `photograph` |
-| `--color` | `-cl` | None | Color filter |
 
 ## Changelog
+
+### 3.1.0
+
+- **New:** DuckDuckGo image search engine — works without Selenium, no API key, Brotli-compressed JSON API
+- **New:** `engine="bing" | "duckduckgo"` parameter on `downloader()` and `--engine` flag on `bbid`
+- **New:** DuckDuckGo-specific options: `ddg_safe_search` (`strict` / `moderate` / `off`) and `ddg_region`
+- **New:** Optional `[duckduckgo]` extra installs the required `brotli` package
+- **New:** `ImageEngine` base class — both engines now share download, dedup, resume, and manifest logic (less duplication, fewer bugs)
+- **Fix:** Atomic file writes in `bing.save_image` (temp file → rename on success, no partial files on failure)
+- **Fix:** Per-future timeout on parallel downloads (was blocking indefinitely on stalled connections)
+- **Fix:** Exponential backoff on Bing network errors (was a fixed 2-second sleep, no retry cap)
+- **Fix:** Bing now stops cleanly when a page yields no new images (was risking infinite loops)
+- **Fix:** `helperdownload` uses `logging` instead of `print()` (no more stdout pollution when used as a library)
+- **Deprecation:** Selenium-based `multidownloader` CLI is deprecated; will be removed in v4.0.0
+- **Tests:** 41 → 72 tests (added atomic-write, parallel-future, DuckDuckGo, engine-dispatch tests)
+
+### 3.0.1
+
+- Updated Bing headers to advertise gzip/deflate; decompresses compressed responses
+- Default adult filter changed to `moderate` (Bing's recommended safe search)
+- New `mkt` parameter (default `en-US`) for region-specific Bing results
 
 ### 3.0.0
 
