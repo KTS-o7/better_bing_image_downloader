@@ -7,6 +7,7 @@ import re
 import logging
 import threading
 import hashlib
+import gzip
 from tqdm import tqdm
 import filetype
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -112,13 +113,16 @@ class Bing:
         self._hash_lock = threading.Lock()
         
         # Standard headers for HTTP requests
+        # NOTE: Accept-Encoding must include gzip so Bing returns the full compressed
+        # response. Without it, Bing now returns a severely truncated page with almost
+        # no image results (only 1 vs 35+ with gzip).
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
-            'Accept-Encoding': 'none',
-            'Accept-Language': 'en-US,en;q=0.8',
-            'Connection': 'keep-alive'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Referer': 'https://www.bing.com/',
         }
         
         # Ensure the output directory exists
@@ -259,7 +263,12 @@ class Bing:
                 
                 request = urllib.request.Request(request_url, None, headers=self.headers)
                 with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                    html = response.read().decode('utf8')
+                    raw = response.read()
+                    content_encoding = response.headers.get('Content-Encoding', '')
+                    if content_encoding == 'gzip':
+                        html = gzip.decompress(raw).decode('utf8')
+                    else:
+                        html = raw.decode('utf8', errors='replace')
                 
                 if not html:
                     logging.info("[%] No more images are available")
