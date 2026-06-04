@@ -45,6 +45,10 @@ dev = [
     "pytest-cov",
     "twine",
     "build",
+    "black>=24.0",
+    "ruff>=0.6.0",
+    "mypy>=1.10",
+    "pre-commit>=3.5",
 ]
 
 [project.scripts]
@@ -58,3 +62,41 @@ Issues = "https://github.com/KTS-o7/better_bing_image_downloader/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["better_bing_image_downloader*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py38"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+extend-exclude = [
+    "better_bing_image_downloader/crawler.py",
+    "better_bing_image_downloader/multidownloader.py",
+    "better_bing_image_downloader/helperdownload.py",
+    "better_bing_image_downloader/utils.py",
+]
+
+[tool.ruff.lint]
+# Default rule set + pycodestyle warnings + bugbear + comprehensions.
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
+ignore = [
+    "E501",  # line length (black handles this)
+    "B008",  # function call in default argument (we use this idiomatically)
+    "SIM105",  # contextlib.suppress is fine but try/except/pass is also clear
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]  # asserts are fine in tests
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # public API is typed, helpers are looser
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+files = ["better_bing_image_downloader"]
+exclude = ["better_bing_image_downloader/crawler.py", "better_bing_image_downloader/multidownloader.py", "better_bing_image_downloader/helperdownload.py", "better_bing_image_downloader/utils.py"]

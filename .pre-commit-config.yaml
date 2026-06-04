@@ -1,0 +1,39 @@
+# Pre-commit hooks for better-bing-image-downloader.
+# Install once with:  pip install pre-commit && pre-commit install
+# Run manually with:  pre-commit run --all-files
+# Skip a hook in an emergency with:  git commit --no-verify
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: ["--config=pyproject.toml"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.5
+    hooks:
+      - id: ruff
+        args: ["--fix", "--config=pyproject.toml"]
+      - id: ruff-format
+        args: ["--config=pyproject.toml"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.0
+    hooks:
+      - id: mypy
+        files: ^better_bing_image_downloader/.*\.py$
+        additional_dependencies: []
+        args: ["--config-file=pyproject.toml"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: mixed-line-ending
+        args: ["--fix=lf"]

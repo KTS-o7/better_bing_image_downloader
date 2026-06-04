@@ -1,4 +1,17 @@
+# Development dependencies for better-bing-image-downloader.
+# Install with:  pip install -r requirements-dev.txt
+# Or:           pip install -e ".[dev]"
+
+# Testing
 pytest>=7.0
 pytest-cov
+
+# Release tooling
 twine
 build
+
+# Linting and formatting
+black>=24.0
+ruff>=0.6.0
+mypy>=1.10
+pre-commit>=3.5
