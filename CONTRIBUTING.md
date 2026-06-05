@@ -14,27 +14,28 @@ python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install the package in editable mode with all dev + optional extras
-pip install -e ".[dev,duckduckgo]"
+pip install -e ".[dev]"
 
 # Install the pre-commit hooks
 pre-commit install
 ```
 
 The `[dev]` extra pulls in pytest, black, ruff, mypy, and pre-commit.
-The `[duckduckgo]` extra pulls in brotli (only needed if you want to
-test the DuckDuckGo engine locally).
+`brotli` is a hard runtime dependency as of v3.1.1, so no extra is
+needed to test the DuckDuckGo engine locally.
 
 ## Running tests
 
 ```bash
-# Run the full test suite (72 tests, 1 network test skipped by default)
+# Run the full test suite (99 tests, 2 network tests skipped by default)
 pytest
 
 # Run with coverage
 pytest --cov=better_bing_image_downloader
 
-# Run the live DuckDuckGo end-to-end test (requires network)
+# Run the live DuckDuckGo end-to-end tests (requires network)
 BBID_RUN_NETWORK_TESTS=1 pytest tests/test_duckduckgo.py -k EndToEnd
+BBID_RUN_NETWORK_TESTS=1 pytest tests/test_v3_2_0_integration.py
 ```
 
 Tests live in `tests/`. New code should come with new tests; the
@@ -65,18 +66,23 @@ Configuration lives in `pyproject.toml` under `[tool.black]`,
 
 ```
 better_bing_image_downloader/
-├── base.py             # ImageEngine base class (download, dedup, resume, manifest)
+├── base.py             # ImageEngine ABC (download, dedup, resume, manifest, hooks)
 ├── bing.py             # Bing image search engine
 ├── crawler.py          # [DEPRECATED] Selenium-based crawler (will be removed in v4)
-├── download.py         # Public downloader() function and bbid CLI
+├── download.py         # Legacy downloader() function and bbid CLI
+├── downloader.py       # Downloader class — v3.2.0+ library entry point
 ├── duckduckgo.py       # DuckDuckGo image search engine
 ├── helperdownload.py   # [DEPRECATED] Concurrent URL-list downloader
 ├── multidownloader.py  # [DEPRECATED] Selenium-based CLI
-└── utils.py            # [DEPRECATED] Config helpers
+├── results.py          # Result and ImageResult value objects
+├── utils.py            # [DEPRECATED] Config helpers
+└── py.typed            # PEP 561 marker — types are exported
 ```
 
-If you're adding a new feature, look at the `base.py` shared logic
-first — most download/dedup/resume concerns are already handled there.
+If you're adding a new feature, look at `base.py` (shared download
+logic) and `downloader.py` (the public embeddable façade) first.
+New code should add a new method to `Downloader` or a new hook,
+not extend the legacy `downloader()` function.
 
 ## Commit conventions
 
@@ -125,22 +131,30 @@ line stays under 72 characters; the body, if any, is wrapped at 72.
 
 ## Adding a new search engine
 
-To add a new engine (e.g. Yandex, Brave):
+To add a new first-class engine (e.g. Yandex, Brave):
 
 1. Create `better_bing_image_downloader/myengine.py` with a class that
    subclasses `base.ImageEngine`.
 2. Implement `__init__` to validate engine-specific options and
    `run()` to fetch URLs and call `self._download_batch()` /
    `self.download_image()`.
-3. Add a branch to `_build_engine()` in `download.py` and expose the
-   engine name in `main()` argparse choices.
-4. Add tests under `tests/test_myengine.py` mirroring the structure
+3. Register the engine in `Downloader._DEFAULT_REGISTRY` in
+   `downloader.py` (so it's a first-class engine exposed by
+   default). Third-party engines should be registered at runtime
+   via `Downloader.register("myengine", MyEngineClass)` instead.
+4. Expose the engine name in `main()` argparse choices
+   (`--engine myengine`) in `download.py` (only for first-class
+   engines).
+5. Add tests under `tests/test_myengine.py` mirroring the structure
    of `tests/test_duckduckgo.py`.
-5. Update the README with a new "Search engines" section.
+6. Update the README with a new "Search engines" section.
 
 The base class handles all the download-side concerns (atomic writes,
 MD5 dedup, resume, manifest, parallel workers, timeouts, exponential
-backoff). Your engine subclass only needs to fetch URL lists.
+backoff). Your engine subclass only needs to fetch URL lists and
+update `self.download_count` / `self._slots_used` as it goes (the
+`Downloader` class wires your engine's `save_image` to fire the
+`on_image` hook and populate the `Result.images` list).
 
 ## Release process
 
@@ -149,11 +163,16 @@ Maintainers cut releases as follows:
 1. Update `CHANGELOG.md` — move "Unreleased" entries under a dated
    version heading.
 2. Bump `version` in `pyproject.toml`.
-3. Commit, push, and tag: `git tag -a v3.X.Y -m "v3.X.Y: <summary>"`.
-4. Push the tag: `git push origin v3.X.Y`.
-5. Create a GitHub release with notes from `CHANGELOG.md`. The
-   `python-publish.yml` workflow will build and upload to PyPI
-   automatically.
+3. Commit on `main` (no PR needed for the version bump itself, but
+   all features should already be merged via PR).
+4. Tag: `git tag -a v3.X.Y -m "v3.X.Y: <one-line summary>"`.
+5. Push the branch and the tag:
+   `git push origin main --follow-tags`.
+6. Create a GitHub release with notes from `CHANGELOG.md`. Use
+   `gh release create v3.X.Y --notes-file <(awk '/^## \[3.X.Y\]/{flag=1} /^## \[3.X.Y-1\]/{flag=0} flag' CHANGELOG.md)`.
+7. The `python-publish.yml` workflow will build and upload to PyPI
+   automatically. Verify on
+   <https://pypi.org/project/better-bing-image-downloader/>.
 
 ## Questions?
 

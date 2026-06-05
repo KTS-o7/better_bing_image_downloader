@@ -6,12 +6,14 @@ repository. Read this before making non-trivial changes.
 ## Project at a glance
 
 - **What it is:** Python library + `bbid` CLI for bulk-downloading
-  images from Bing or DuckDuckGo.
-- **Python:** 3.8+. Pure-stdlib HTTP (urllib), optional `brotli` for
-  DuckDuckGo, optional `selenium` for the legacy `multidownloader` path.
+  images from Bing or DuckDuckGo. The recommended way to use it as a
+  library is the `Downloader` class (added in v3.2.0).
+- **Python:** 3.8+. Pure-stdlib HTTP (urllib), `brotli` for DuckDuckGo
+  (hard dep since v3.1.1), optional `selenium` for the legacy
+  `multidownloader` path.
 - **No CI is configured** (per the maintainer's request). Lint/type/test
   is run locally before pushing.
-- **Tests:** 72 passing, 1 network test skipped by default
+- **Tests:** 99 passing, 2 network tests skipped by default
   (`BBID_RUN_NETWORK_TESTS=1` to enable).
 - **Linters:** `black` (formatter), `ruff` (lint), `mypy` (types).
   All three run via pre-commit.
@@ -20,11 +22,13 @@ repository. Read this before making non-trivial changes.
 
 | File | What it does | Modify freely? |
 |------|--------------|----------------|
-| `base.py` | `ImageEngine` base class — atomic write, dedup, resume, manifest, parallel downloads, future timeout | ✅ Yes |
+| `base.py` | `ImageEngine` abstract base class — atomic write, dedup, resume, manifest, parallel downloads, future timeout. Defines `run()` as `@abstractmethod` | ✅ Yes |
 | `bing.py` | Bing image search engine (inherits from `base.ImageEngine`) | ✅ Yes |
 | `duckduckgo.py` | DuckDuckGo image search engine (inherits from `base.ImageEngine`) | ✅ Yes |
-| `download.py` | Public `downloader()` function, `bbid` CLI, engine dispatch | ✅ Yes |
-| `__init__.py` | Public API surface | ✅ Yes |
+| `downloader.py` | `Downloader` class, engine registry, lifecycle hooks. **v3.2.0+ entry point** | ✅ Yes |
+| `results.py` | `Result` and `ImageResult` value objects returned by `Downloader.search()` | ✅ Yes |
+| `download.py` | Module-level `downloader()` function (legacy wrapper around `Downloader`) and `bbid` CLI | ✅ Yes |
+| `__init__.py` | Public API surface — re-exports `Bing`, `DuckDuckGo`, `Downloader`, `ImageResult`, `Result`, `downloader` | ✅ Yes |
 | `crawler.py` | **DEPRECATED** Selenium-based crawler | ⚠️ Don't extend; remove in v4.0.0 |
 | `multidownloader.py` | **DEPRECATED** Selenium-based CLI | ⚠️ Don't extend; remove in v4.0.0 |
 | `helperdownload.py` | **DEPRECATED** Used by `multidownloader` | ⚠️ Don't extend; remove in v4.0.0 |
@@ -77,7 +81,7 @@ optional but useful (`feat(duckduckgo): add region code`).
 - **Minor** (3.x.0): new features, backwards-compatible.
 - **Major** (x.0.0): breaking changes.
 
-The current version is **3.1.0**. Bump in `pyproject.toml` and
+The current version is **3.2.0**. Bump in `pyproject.toml` and
 `CHANGELOG.md` when cutting a release. Releases are cut by:
 1. Committing on `main`.
 2. Tagging (`git tag -a v3.X.Y -m "v3.X.Y: summary"`).
@@ -109,7 +113,14 @@ The current version is **3.1.0**. Bump in `pyproject.toml` and
   pattern into new code.
 - **Don't silently change return types or signatures** on
   `downloader()`, `Bing`, or `DuckDuckGo`. Add a new parameter with a
-  default value instead.
+  default value instead. New public types (`Result`, `ImageResult`)
+  should be added in a backwards-compatible way — e.g. as a new
+  return type on a new method (`Downloader.search()`), not by
+  repurposing the existing `int` from `downloader()`.
+- **Don't bypass the engine registry** (`Downloader.register`) to
+  plug in a custom engine. Monkey-patching `_build_engine()` (which
+  was removed in 3.2.0 anyway) or `Downloader._DEFAULT_REGISTRY` is
+  a code smell — register a proper `ImageEngine` subclass instead.
 - **Don't commit `dist/`, `build/`, `__pycache__/`, or `.venv/`.**
   The `.gitignore` should already cover these, but double-check
   before committing.
@@ -123,8 +134,12 @@ The current version is **3.1.0**. Bump in `pyproject.toml` and
 2. Implement `__init__` to validate engine-specific options.
 3. Implement `run()` to fetch URL pages and call
    `self._download_batch(links, start_index=self.download_count + 1)`.
-4. Add the engine to `_build_engine()` in `download.py`.
-5. Add `--engine myengine` to the CLI argparse choices in `main()`.
+4. Register the engine in `Downloader._DEFAULT_REGISTRY` in
+   `downloader.py` (so it's a first-class engine). If it's a
+   third-party engine, document the `Downloader.register("myengine",
+   MyEngineClass)` pattern in the README instead.
+5. Add `--engine myengine` to the CLI argparse choices in `main()`
+   (only for first-class engines).
 6. Add tests in `tests/test_myengine.py` mirroring `test_duckduckgo.py`.
 7. Add a "Search engines" section to `README.md`.
 
