@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [3.1.1] - 2026-06-05
+
+### Added
+
+- `Bing()` and `DuckDuckGo()` can now be instantiated with just
+  `(query, limit, output_dir)` — `adult`, `timeout`, `filter`, `verbose`,
+  and engine-specific options all have sensible defaults. This makes the
+  library genuinely integrable: `Bing("cat", 10, "/tmp/x")` works
+  without keyword arguments.
+- `py.typed` marker shipped. Downstream `mypy --strict` users now get the
+  type hints we test against (previously all function signatures appeared
+  as `Any` to external type-checkers).
+
+### Changed
+
+- `brotli` is now a hard runtime dependency (was an optional `[duckduckgo]`
+  extra). DuckDuckGo's CDN returns 403 if the client can't decode Brotli,
+  so the "extra" was a footgun: a fresh `pip install` and a `ddg` run
+  would silently fail with no clear error.
+- `downloader()` signature: only `query` is required; all 12 other
+  parameters have defaults. This unblocks the common case of
+  `downloader("cats")` in a notebook.
+
+### Removed
+
+- `[duckduckgo]` optional-dependency extra — `brotli` is now always
+  installed.
+
 ## [3.1.0] - 2026-06-04
 
 ### Added

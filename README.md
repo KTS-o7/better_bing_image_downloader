@@ -43,19 +43,13 @@ A fast, reliable Python library and CLI tool for bulk downloading images from Bi
 pip install better-bing-image-downloader
 ```
 
-For **DuckDuckGo** engine support (installs the `brotli` package for response decoding):
+For **Google/Selenium** (legacy, deprecated in 3.1.0) support:
 
 ```bash
-pip install "better-bing-image-downloader[duckduckgo]"
+pip install "better-bing-image-downloader[google]"
 ```
 
-If you want both engines in one install:
-
-```bash
-pip install "better-bing-image-downloader[duckduckgo,google]"
-```
-
-The Bing engine works out of the box with no extra dependencies. The DuckDuckGo engine requires `brotli` (used to decode DuckDuckGo's Brotli-compressed responses).
+Both Bing and DuckDuckGo engines work out of the box — no extra dependencies. The `brotli` package (used to decode DuckDuckGo's Brotli-compressed responses) is a hard runtime dependency as of 3.1.1.
 
 ### From source
 
@@ -64,7 +58,7 @@ git clone https://github.com/KTS-o7/better_bing_image_downloader
 cd better_bing_image_downloader
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -e ".[duckduckgo,dev]"
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
@@ -104,7 +98,7 @@ bbid "golden retriever" --limit 50 --engine duckduckgo
 - No API key, no rate-limit token beyond a short-lived `vqd` cookie
 - Supports safe-search modes: `strict`, `moderate` (default), `off`
 - Supports region codes (e.g. `us-en`, `uk-en`)
-- Requires the `brotli` Python package: `pip install "better-bing-image-downloader[duckduckgo]"`
+- No additional dependencies (`brotli` is bundled in the base install)
 
 DuckDuckGo is a great fallback when Bing is rate-limiting or blocking your IP, and vice versa.
 
@@ -311,7 +305,7 @@ downloader("mountain landscape", limit=500, output_dir="dataset")
 
 The Selenium-based `multidownloader` CLI is **deprecated** and will be removed in v4.0.0. The Google path no longer works: Google serves a JavaScript-only shell page to all non-browser HTTP requests, so image URLs cannot be extracted without a real browser.
 
-For the Bing path, prefer the new `bbid` CLI or `downloader()` function with `engine="bing"`. As a DuckDuckGo alternative, install the `[duckduckgo]` extra and use `bbid --engine duckduckgo`.
+For the Bing path, prefer the new `bbid` CLI or `downloader()` function with `engine="bing"`. As a DuckDuckGo alternative, use `bbid --engine duckduckgo` (or `engine="duckduckgo"` in Python).
 
 If you have a hard requirement on the Selenium path, you can still import it directly, but expect a `DeprecationWarning`:
 
@@ -324,6 +318,13 @@ main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
 
 ## Changelog
+
+### 3.1.1 (integrability patch)
+
+- **New:** `Bing()` and `DuckDuckGo()` can be instantiated with just `(query, limit, output_dir)` — `adult`, `timeout`, `filter`, `verbose`, and engine-specific options all have sensible defaults
+- **New:** `brotli` is now a hard runtime dependency (was an optional `[duckduckgo]` extra that returned 403 if missing)
+- **New:** `py.typed` marker shipped — downstream `mypy` users get the type hints we test against
+- **Fix:** `downloader()` signature: only `query` is required, all 12+ other parameters have defaults
 
 ### 3.1.0
 
