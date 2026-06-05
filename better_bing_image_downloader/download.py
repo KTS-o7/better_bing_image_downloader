@@ -1,4 +1,13 @@
-"""Public downloader API and CLI entry point."""
+"""Legacy ``downloader()`` function and the ``bbid`` CLI entry point.
+
+The module-level :func:`downloader` is preserved as a thin wrapper
+around :class:`better_bing_image_downloader.downloader.Downloader`
+for backwards compatibility with code written against the v3.0.x and
+v3.1.x API.
+
+New code should prefer :class:`Downloader` directly: it gives you a
+:class:`Result` object, lifecycle hooks, and the engine registry.
+"""
 
 from __future__ import annotations
 
@@ -13,70 +22,9 @@ from pathlib import Path
 
 from tqdm import tqdm
 
-from .bing import Bing
+from .downloader import Downloader
 
 __all__ = ["downloader", "main"]
-
-
-def _build_engine(
-    engine,
-    query,
-    limit,
-    output_dir,
-    image_filter,
-    timeout,
-    verbose,
-    badsites,
-    name,
-    max_workers,
-    force_replace,
-    adult,
-    ddg_safe_search,
-    ddg_region,
-    mkt,
-):
-    """Instantiate the requested engine.
-
-    Raises
-    ------
-    ValueError
-        If ``engine`` is not a known engine name.
-    ImportError
-        If the DuckDuckGo engine is requested but ``brotli`` is missing.
-    """
-    if engine == "bing":
-        return Bing(
-            query=query,
-            limit=limit,
-            output_dir=output_dir,
-            adult=adult,
-            timeout=timeout,
-            filter=image_filter,
-            verbose=verbose,
-            badsites=badsites,
-            name=name,
-            max_workers=max_workers,
-            force_replace=force_replace,
-            mkt=mkt,
-        )
-    if engine == "duckduckgo":
-        # Imported lazily so the Bing path doesn't require brotli.
-        from .duckduckgo import DuckDuckGo
-
-        return DuckDuckGo(
-            query=query,
-            limit=limit,
-            output_dir=output_dir,
-            timeout=timeout,
-            verbose=verbose,
-            badsites=badsites,
-            name=name,
-            max_workers=max_workers,
-            force_replace=force_replace,
-            safe_search=ddg_safe_search,
-            region=ddg_region,
-        )
-    raise ValueError(f"Unknown engine {engine!r}. Must be 'bing' or 'duckduckgo'.")
 
 
 def downloader(
@@ -98,6 +46,12 @@ def downloader(
     **kwargs,
 ) -> int:
     """Download images matching ``query`` using the chosen search engine.
+
+    .. deprecated:: 3.2.0
+        This function is kept for backwards compatibility. New code
+        should use :class:`Downloader` directly to get a
+        :class:`Result` object, lifecycle hooks, and engine registry
+        support. The function will not be removed.
 
     Parameters
     ----------
@@ -149,82 +103,106 @@ def downloader(
         )
         image_filter = kwargs.pop("filter")
 
+    if kwargs:
+        raise TypeError(f"Unexpected keyword arguments: {sorted(kwargs)}")
+
     if engine not in ("bing", "duckduckgo"):
         raise ValueError(f"engine must be 'bing' or 'duckduckgo', got {engine!r}")
 
-    # Bing-specific options silently ignored when using DuckDuckGo
-    if engine == "duckduckgo" and verbose:
-        for _ignored in ("mkt", "image_filter", "adult_filter_off"):
-            pass  # silently ignore, no warning for now
-
-    # Set adult filter setting (Bing only)
-    adult = "off" if adult_filter_off else "moderate"
-
     badsites = list(badsites) if badsites else []
 
+    # Honour the legacy progress-bar behaviour: the v3.1.x downloader()
+    # function showed a tqdm bar. The new Downloader() doesn't (it
+    # surfaces progress via hooks instead). We bridge that here.
     image_dir = Path(output_dir) / query
-
     if force_replace and image_dir.exists():
         shutil.rmtree(image_dir)
 
-    try:
-        image_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        raise OSError(f"Failed to create directory {image_dir}: {e}") from e
-
     logging.info("Downloading Images to %s", image_dir)
 
-    with tqdm(
-        total=limit,
-        unit="img",
-        ncols=100,
-        colour="green",
-        bar_format=(
-            "{l_bar}{bar} {n_fmt}/{total_fmt} imgs " "| Speed: {rate_fmt} | ETA: {remaining}"
-        ),
-    ) as pbar:
+    dl = Downloader()
+    pbar_cm = None
+    if verbose:
+        pbar_cm = tqdm(
+            total=limit,
+            unit="img",
+            ncols=100,
+            colour="green",
+            bar_format=(
+                "{l_bar}{bar} {n_fmt}/{total_fmt} imgs " "| Speed: {rate_fmt} | ETA: {remaining}"
+            ),
+        )
 
-        def update_progress_bar(download_count: int) -> None:
-            pbar.n = download_count
-            pbar.refresh()
+    def _on_image(_img) -> None:
+        if pbar_cm is not None:
+            pbar_cm.n = _on_image.counter  # type: ignore[attr-defined]
+            pbar_cm.refresh()
+        _on_image.counter = getattr(_on_image, "counter", 0) + 1  # type: ignore[attr-defined]
 
-        engine_obj = _build_engine(
-            engine=engine,
+    dl.on_image = _on_image
+
+    try:
+        result = dl.search(
             query=query,
             limit=limit,
-            output_dir=image_dir,
-            image_filter=image_filter,
-            timeout=timeout,
-            verbose=verbose,
+            output_dir=output_dir,
+            engine=engine,
             badsites=badsites,
             name=name,
             max_workers=max_workers,
             force_replace=force_replace,
-            adult=adult,
+            timeout=timeout,
+            verbose=verbose,
+            image_filter=image_filter,
+            mkt=mkt,
             ddg_safe_search=ddg_safe_search,
             ddg_region=ddg_region,
-            mkt=mkt,
+            adult_filter_off=adult_filter_off,
         )
-        engine_obj.download_callback = update_progress_bar
-        try:
-            engine_obj.run()
-        finally:
-            manifest_path = image_dir / "_manifest.json"
-            existing_manifest = {}
-            if manifest_path.exists():
-                try:
-                    with open(manifest_path) as f:
-                        existing_manifest = json.load(f)
-                except Exception:
-                    pass
-            existing_manifest.update(engine_obj.manifest)
-            try:
-                with open(manifest_path, "w") as f:
-                    json.dump(existing_manifest, f, indent=2)
-            except Exception as e:
-                logging.error("Failed to write manifest: %s", e)
+        # Preserve the v3.1.x contract: the legacy downloader()
+        # function returns the engine's ``download_count``, which the
+        # engine controls. The new ``Downloader().search()`` returns a
+        # ``Result`` whose ``.count`` is the hook-observed save count.
+        # These should be equal in real runs (every save the engine
+        # counts also fires the on_image hook), but the legacy API
+        # exposes the engine's view for backwards compatibility.
+        eng = result.engine_instance()
+        if eng is not None:
+            return eng.download_count
+        return result.count
+    finally:
+        if pbar_cm is not None:
+            pbar_cm.close()
+        # v3.1.x also wrote a _manifest.json file at the end. We
+        # preserve that for any tooling that depends on it.
+        _write_legacy_manifest(image_dir, result if "result" in locals() else None)
 
-    return int(engine_obj.download_count)
+
+def _write_legacy_manifest(image_dir: Path, result) -> None:
+    """Write the v3.1.x-style _manifest.json. Best-effort, never raises."""
+    try:
+        existing: dict = {}
+        manifest_path = image_dir / "_manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path) as f:
+                    existing = json.load(f)
+            except Exception:
+                pass
+        if result is not None:
+            # Include both the engine's view (filename -> source_url,
+            # preserved from v3.1.x) and the Result's view (from the
+            # hook-observed save events). They are usually identical,
+            # but merging keeps the legacy contract intact.
+            engine = getattr(result, "_engine", None)
+            if engine is not None and getattr(engine, "manifest", None):
+                existing.update(engine.manifest)
+            for img in result.images:
+                existing[img.path.name] = img.source_url
+        with open(manifest_path, "w") as f:
+            json.dump(existing, f, indent=2)
+    except Exception as e:
+        logging.error("Failed to write manifest: %s", e)
 
 
 def main() -> None:

@@ -1,15 +1,26 @@
 import logging
 
+from .base import ImageEngine
 from .bing import Bing
 from .download import downloader
+from .downloader import Downloader
+from .results import ImageResult, Result
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
-__all__ = ["Bing", "downloader"]
+__all__ = [
+    "Bing",
+    "Downloader",
+    "ImageEngine",
+    "ImageResult",
+    "Result",
+    "downloader",
+]
 
-# ``DuckDuckGo`` is exposed lazily because importing it requires the
-# optional ``brotli`` package.  This lets users of the Bing-only path
-# install without brotli.
+# ``DuckDuckGo`` is exposed eagerly as of v3.1.1: ``brotli`` is a hard
+# dependency, so the import always succeeds. The try/except is kept
+# for compatibility with users on older Python builds where the
+# conditional import might still apply.
 try:
     from .duckduckgo import DuckDuckGo  # noqa: F401
 

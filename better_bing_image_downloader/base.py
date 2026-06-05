@@ -16,6 +16,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from abc import ABC, abstractmethod
 from pathlib import Path
 
 import filetype
@@ -56,7 +57,7 @@ DEFAULT_HEADERS = {
 }
 
 
-class ImageEngine:
+class ImageEngine(ABC):
     """Base class for image search engine scrapers.
 
     Subclasses implement :meth:`run` to fetch URLs from their backend and
@@ -70,13 +71,18 @@ class ImageEngine:
         query: str,
         limit: int,
         output_dir,
-        timeout: int,
+        timeout: int = 60,
         verbose: bool = True,
         badsites=None,
         name: str = "Image",
         max_workers: int = 4,
         force_replace: bool = False,
     ):
+        # Abstract base class — subclasses MUST override ``run()``.
+        # The abstractmethod below is what makes
+        # ``ImageEngine`` uncallable as ``ImageEngine(...)`` directly,
+        # while still letting concrete subclasses (Bing, DuckDuckGo)
+        # call ``super().__init__()``.
         assert isinstance(limit, int), "limit must be integer"
         assert isinstance(timeout, int), "timeout must be integer"
         assert isinstance(max_workers, int), "max_workers must be integer"
@@ -101,6 +107,29 @@ class ImageEngine:
         self._hash_lock = threading.Lock()
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    @abstractmethod
+    def run(self) -> None:
+        """Fetch image URLs from the engine and download them.
+
+        Subclasses implement this to call :meth:`download_image` (or
+        :meth:`_download_batch`) for each URL returned by their
+        backend.
+        """
+        raise NotImplementedError
+
+    # Re-declare instance attributes as class-level annotations so
+    # static analysers (mypy) can see them on ``self`` without having
+    # to walk the ``__init__`` body.
+    query: str
+    limit: int
+    output_dir: Path
+    timeout: int
+    verbose: bool
+    badsites: set
+    image_name: str
+    max_workers: int
+    force_replace: bool
 
     # --- HTTP helpers ---
 

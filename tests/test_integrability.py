@@ -51,6 +51,7 @@ def test_downloader_callable_with_minimal_args(tmp_path: Path) -> None:
         and p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
     ]
     # `query` is the only required positional. `limit` has a default.
+    # `**kwargs` (VAR_KEYWORD) is filtered out.
     assert required == ["query"], f"Expected only `query` required, got {required}"
 
 

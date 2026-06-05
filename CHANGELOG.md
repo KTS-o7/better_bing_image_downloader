@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-06-05
+
+### Added
+
+- `Downloader` class — the recommended entry point for library users.
+  Owns a session (cookie jar + opener), an engine registry, and
+  lifecycle hooks. See the README's "Embedding as a library" section.
+- `Result` and `ImageResult` value objects — `Downloader.search()`
+  returns a `Result` with the full list of saved images, errors, and
+  metadata (`query`, `engine`, `output_dir`, `count`, `total_bytes`,
+  `skipped`, `errors`).
+- Lifecycle hooks: `on_image`, `on_error`, `on_engine_start`,
+  `on_engine_done` — wire progress, logging, or cancellation into
+  the download flow.
+- Public engine registry: `Downloader.register(name, engine_class)`.
+  Plug in custom engines without monkey-patching. Subclassing of
+  `ImageEngine` is enforced.
+- Shared session across calls — one `Downloader` instance reuses TCP
+  connections and DuckDuckGo's `vqd` cookie across many searches
+  (the latter is critical: without a stable vqd cookie, DDG's `i.js`
+  returns 403).
+- `ImageEngine` is now an `ABC` with `@abstractmethod run()`. Custom
+  engines get a clear contract enforced by mypy at type-check time.
+- 18 new unit tests + 1 live integration test (`tests/test_v3_2_0_*`).
+  Total: 99 passing, 1 network test skipped by default.
+
+### Changed
+
+- The module-level `downloader()` function is now a thin wrapper
+  around `Downloader().search()`. It still returns `int` for
+  backwards compatibility, but the recommended way to get full
+  results is `Result` from `Downloader.search()`.
+- `ImageEngine.__init__` no longer requires `timeout` as a positional
+  argument; default is 60s. Custom engine subclasses can be minimal
+  (`class MyEngine(ImageEngine): def run(self): ...`).
+- `ImageResult.index` renamed to `ImageResult.image_index` to avoid
+  collision with `tuple.index()` in mypy.
+
 ## [3.1.1] - 2026-06-05
 
 ### Added

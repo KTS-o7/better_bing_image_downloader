@@ -40,12 +40,16 @@ class TestResumeSupport:
 class TestManifest:
     def test_manifest_written_after_downloader_run(self, tmp_path):
         """downloader() should write _manifest.json after a run"""
-        with patch("better_bing_image_downloader.download.Bing") as MockBing:
-            mock_instance = MagicMock()
-            mock_instance.download_count = 1
-            mock_instance.seen = {"http://example.com/img.jpg"}
-            mock_instance.manifest = {"Image_1.jpg": "http://example.com/img.jpg"}
-            MockBing.return_value = mock_instance
+        mock_cls = _build_mock_engine_cls(0)
+        mock_instance = mock_cls.return_value
+        # Pre-populate the engine's manifest so the legacy downloader
+        # can write it out to disk on the way through.
+        mock_instance.manifest = {"Image_1.jpg": "http://example.com/img.jpg"}
+
+        with patch(
+            "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+            {"bing": mock_cls, "duckduckgo": mock_cls},
+        ):
             downloader("cats", limit=1, output_dir=str(tmp_path))
 
         manifest_path = tmp_path / "cats" / "_manifest.json"
@@ -61,17 +65,37 @@ class TestManifest:
         existing_manifest = {"Image_1.jpg": "http://example.com/1.jpg"}
         (query_dir / "_manifest.json").write_text(json.dumps(existing_manifest))
 
-        with patch("better_bing_image_downloader.download.Bing") as MockBing:
-            mock_instance = MagicMock()
-            mock_instance.download_count = 1
-            mock_instance.seen = {"http://example.com/2.jpg"}
-            mock_instance.manifest = {"Image_2.jpg": "http://example.com/2.jpg"}
-            MockBing.return_value = mock_instance
+        mock_cls = _build_mock_engine_cls(0)
+        mock_instance = mock_cls.return_value
+        mock_instance.manifest = {"Image_2.jpg": "http://example.com/2.jpg"}
+
+        with patch(
+            "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+            {"bing": mock_cls, "duckduckgo": mock_cls},
+        ):
             downloader("cats", limit=1, output_dir=str(tmp_path))
 
         data = json.loads((query_dir / "_manifest.json").read_text())
         assert "Image_1.jpg" in data  # old entry preserved
         assert "Image_2.jpg" in data  # new entry added
+
+
+def _build_mock_engine_cls(num_downloads: int):
+    """Build a mock engine class whose run() simulates N successful saves."""
+    mock_cls = MagicMock()
+    mock_instance = mock_cls.return_value
+    mock_instance.download_count = 0
+    mock_instance._slots_used = 0
+    mock_instance.seen = set()
+    mock_instance.manifest = {}
+
+    def fake_run() -> None:
+        for i in range(1, num_downloads + 1):
+            mock_instance.download_count = i
+            mock_instance._slots_used = i
+
+    mock_instance.run = MagicMock(side_effect=fake_run)
+    return mock_cls
 
 
 class TestDeduplication:

@@ -129,6 +129,57 @@ print(f"Downloaded {count} images")
 
 The return value is the number of **newly downloaded** images (not counting files that were already on disk from a previous run).
 
+### Embedding as a library (recommended for serious use)
+
+For web services, data pipelines, or anywhere you want more than a one-shot
+return value, use the `Downloader` class. It gives you a `Result` object
+with the full list of saved images, lifecycle hooks for progress / error
+reporting, a public engine registry for plugging in custom engines, and
+a shared session (cookie jar + opener) so DuckDuckGo's vqd cookie
+survives across many search calls.
+
+```python
+from better_bing_image_downloader import Downloader, ImageResult, Result
+
+# Zero-arg construction
+dl = Downloader()
+
+# Optional lifecycle hooks
+dl.on_image = lambda img: print(f"saved {img.path.name} ({img.size_bytes} bytes)")
+dl.on_error = lambda url, exc: print(f"failed {url}: {exc}")
+
+# Run a search
+result: Result = dl.search("red panda", limit=10, engine="duckduckgo")
+
+print(f"Saved {result.count} images to {result.output_dir}")
+for img in result.images:
+    print(f"  {img.image_index}. {img.path.name} from {img.source_url}")
+    # img.size_bytes, img.mime_type, img.engine, img.query also available
+```
+
+#### Plugging in a custom engine
+
+Subclass `ImageEngine`, register it, and the `Downloader` will route to it:
+
+```python
+from better_bing_image_downloader import Downloader, ImageEngine, Bing
+
+class MyEngine(Bing):
+    """Engine that searches Bing with a fixed mkt and custom filter."""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("mkt", "de-DE")
+        kwargs.setdefault("filter", "photo")
+        super().__init__(*args, **kwargs)
+
+dl = Downloader()
+dl.register("myengine", MyEngine)
+result = dl.search("bergsteiger", limit=5, engine="myengine")
+```
+
+`register(name, cls)` enforces that `cls` is a subclass of `ImageEngine`,
+so the registry only accepts engines that implement the expected
+`run()` / `download_image()` contract.
+
 ### Resume behaviour
 
 By default (`force_replace=False`), re-running the same query skips already-downloaded files and downloads only what's missing:
@@ -318,6 +369,17 @@ main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
 
 ## Changelog
+
+### 3.2.0 (embeddable API)
+
+- **New:** `Downloader` class — the recommended entry point for library users. Owns a session (cookie jar + opener), an engine registry, and lifecycle hooks
+- **New:** `Result` and `ImageResult` value objects — `Downloader.search()` returns a `Result` with the full list of saved images, errors, and metadata
+- **New:** Lifecycle hooks: `on_image`, `on_error`, `on_engine_start`, `on_engine_done` — wire progress, logging, or cancellation into the download flow
+- **New:** Public engine registry: `Downloader.register(name, engine_class)` — plug in custom engines without monkey-patching
+- **New:** Shared session across calls — one `Downloader` instance reuses TCP connections and DuckDuckGo's `vqd` cookie across many searches
+- **New:** `ImageEngine` is now an abstract base class with `@abstractmethod run()` — custom engines get a clear contract enforced by mypy
+- **Backward compatible:** the module-level `downloader()` function and per-engine classes (`Bing`, `DuckDuckGo`) still work; they're thin wrappers over `Downloader`
+- **Tests:** 72 → 99 tests (added 18 v3.2.0 API tests + 1 live integration test)
 
 ### 3.1.1 (integrability patch)
 

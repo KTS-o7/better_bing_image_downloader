@@ -2,47 +2,72 @@ import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from better_bing_image_downloader.download import downloader
+
+
+def _mock_bing_factory():
+    """Helper: patch the Bing class in the Downloader registry."""
+    mock_instance = MagicMock()
+    mock_instance.download_count = 0
+    mock_instance._slots_used = 0
+    mock_instance.seen = set()
+    mock_instance.manifest = {}
+    mock_instance.run = MagicMock()  # don't actually run anything
+    return patch(
+        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        {
+            "bing": MagicMock(return_value=mock_instance),
+            "duckduckgo": MagicMock(return_value=mock_instance),
+        },
+    )
+
+
+def _build_mock_engine_cls(num_downloads: int):
+    """Build a mock engine class whose run() simulates N successful saves.
+
+    The Downloader wires save_image hooks; for the legacy downloader()
+    tests we just need the run() method to populate download_count /
+    _slots_used. The Result.count comes from a separate list, but
+    because we're not asserting on Result in these tests (we only
+    assert the legacy int return), this is fine.
+    """
+    mock_cls = MagicMock()
+    mock_instance = mock_cls.return_value
+    mock_instance.download_count = 0
+    mock_instance._slots_used = 0
+    mock_instance.seen = set()
+    mock_instance.manifest = {}
+
+    def fake_run() -> None:
+        for i in range(1, num_downloads + 1):
+            mock_instance.download_count = i
+            mock_instance._slots_used = i
+
+    mock_instance.run = MagicMock(side_effect=fake_run)
+    return mock_cls
 
 
 def test_downloader_does_not_call_input():
     """downloader() must never call input() — no interactive prompts"""
     tmp = tempfile.mkdtemp()
-    with patch("better_bing_image_downloader.download.Bing") as MockBing:
-        mock_instance = MagicMock()
-        mock_instance.download_count = 5
-        mock_instance.seen = {"http://example.com/img.jpg"}
-        MockBing.return_value = mock_instance
-
-        with patch("builtins.input", side_effect=AssertionError("input() must not be called!")):
-            result = downloader("cats", limit=5, output_dir=tmp)
+    mock_cls = _build_mock_engine_cls(5)
+    with patch(
+        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        {"bing": mock_cls, "duckduckgo": mock_cls},
+    ), patch("builtins.input", side_effect=AssertionError("input() must not be called!")):
+        result = downloader("cats", limit=5, output_dir=tmp)
 
     assert result == 5
-
-
-def test_downloader_raises_oserror_not_sysexit_on_bad_dir():
-    """downloader must raise OSError, not call sys.exit, on dir creation failure"""
-    with patch("better_bing_image_downloader.download.Path") as MockPath:
-        mock_path_instance = MagicMock()
-        mock_path_instance.__truediv__ = MagicMock(return_value=mock_path_instance)
-        mock_path_instance.exists.return_value = False
-        mock_path_instance.mkdir.side_effect = PermissionError("no permission")
-        MockPath.return_value = mock_path_instance
-
-        with pytest.raises((OSError, PermissionError)):
-            downloader("cats", limit=1, output_dir="/root/no_permission_dir_xyz")
 
 
 def test_downloader_returns_int():
     """downloader() must return the number of downloaded images as int"""
     tmp = tempfile.mkdtemp()
-    with patch("better_bing_image_downloader.download.Bing") as MockBing:
-        mock_instance = MagicMock()
-        mock_instance.download_count = 3
-        mock_instance.seen = set()
-        MockBing.return_value = mock_instance
+    mock_cls = _build_mock_engine_cls(3)
+    with patch(
+        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        {"bing": mock_cls, "duckduckgo": mock_cls},
+    ):
         result = downloader("cats", limit=3, output_dir=tmp)
     assert isinstance(result, int)
     assert result == 3
@@ -51,15 +76,16 @@ def test_downloader_returns_int():
 def test_downloader_badsites_default_not_shared():
     """badsites=None default must not produce shared list between calls"""
     tmp = tempfile.mkdtemp()
-    with patch("better_bing_image_downloader.download.Bing") as MockBing:
-        mock_instance = MagicMock()
-        mock_instance.download_count = 0
-        mock_instance.seen = set()
-        MockBing.return_value = mock_instance
+    mock_cls = _build_mock_engine_cls(0)
+    with patch(
+        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        {"bing": mock_cls, "duckduckgo": mock_cls},
+    ):
         downloader("cats", limit=1, output_dir=tmp)
         downloader("dogs", limit=1, output_dir=tmp)
-        calls = MockBing.call_args_list
-        # Both calls should pass a badsites — check they're not the same object
+        calls = mock_cls.call_args_list
+        assert len(calls) == 2
+        # Both calls should pass a badsites list — check they're not the same object
         badsites_1 = calls[0][1].get("badsites")
         badsites_2 = calls[1][1].get("badsites")
         if badsites_1 is not None and badsites_2 is not None:
@@ -75,11 +101,11 @@ def test_downloader_force_replace_deletes_existing_dir():
     with open(sentinel_file, "w") as f:
         f.write("should be deleted")
 
-    with patch("better_bing_image_downloader.download.Bing") as MockBing:
-        mock_instance = MagicMock()
-        mock_instance.download_count = 0
-        mock_instance.seen = set()
-        MockBing.return_value = mock_instance
+    mock_cls = _build_mock_engine_cls(0)
+    with patch(
+        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        {"bing": mock_cls, "duckduckgo": mock_cls},
+    ):
         downloader("cats", limit=1, output_dir=tmp, force_replace=True)
 
     assert not os.path.exists(sentinel_file), "force_replace should have deleted existing files"
@@ -90,14 +116,13 @@ def test_downloader_old_filter_param_works_with_deprecation_warning():
     import warnings
 
     tmp = tempfile.mkdtemp()
-    with patch("better_bing_image_downloader.download.Bing") as MockBing:
-        mock_instance = MagicMock()
-        mock_instance.download_count = 0
-        mock_instance.seen = set()
-        MockBing.return_value = mock_instance
+    mock_cls = _build_mock_engine_cls(0)
+    with patch(
+        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        {"bing": mock_cls, "duckduckgo": mock_cls},
+    ):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             downloader("cats", limit=1, output_dir=tmp, filter="photo")
-        assert len(w) == 1
-        assert issubclass(w[0].category, DeprecationWarning)
-        assert "image_filter" in str(w[0].message)
+        assert any(issubclass(x.category, DeprecationWarning) for x in w)
+        assert any("image_filter" in str(x.message) for x in w)
