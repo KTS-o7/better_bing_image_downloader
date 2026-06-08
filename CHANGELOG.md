@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-06-05
+
+### Added
+
+- **Typed `ImageSaveError` subclasses**: `NetworkError`,
+  `InvalidImageError`, `DuplicateImageError`, `WriteError`. All
+  are subclasses of `ImageSaveError` (so existing
+  `except ImageSaveError:` continues to work) but give callers
+  a way to distinguish failure reasons without parsing the
+  `reason` string. Resolves the 3.2.1 TODO.
+- **`on_progress` hook** on `Downloader`:
+  `on_progress(percent, downloaded, total, eta_seconds)`. Fires
+  after each successful download. `eta_seconds` is `None` until
+  the second download (one sample isn't enough to extrapolate).
+  Powers progress bars and ETA displays.
+- **`Downloader.search_async()`**: async wrapper around
+  `search()`. Runs the existing engine in a thread via
+  `asyncio.to_thread()`, so it works with the stdlib-only
+  urllib-based engines — no new dependencies, no
+  `aiohttp`. Returns the same `Result`. Hooks, cancellation
+  token, and progress callback all work.
+- **`ImageSaveError` and subclasses are now exposed at the top
+  level** (`from better_bing_image_downloader import
+  NetworkError`, etc.).
+- **`_save_image_raising()` method** on `ImageEngine` — the
+  new typed-exception variant. `save_image()` is now a thin
+  wrapper that catches and returns `False` for backwards
+  compatibility. `Downloader.search` uses the raising variant
+  directly.
+
+### Changed
+
+- `save_image` is now the catching wrapper. Existing code that
+  calls `engine.save_image()` and checks the bool return value
+  continues to work unchanged. New code that wants typed
+  exceptions should use `engine._save_image_raising()`.
+- `Result.errors` entries that come from a `save_image`
+  failure are now typed (e.g. `NetworkError` instead of
+  generic `ImageSaveError(reason="save_failed")`). Users
+  catching `ImageSaveError` are unaffected.
+
+### Tests
+
+- 11 new tests in `tests/test_v3_4_0_features.py`:
+  - `ImageSaveError` subclass importability and Liskov
+    substitution
+  - Network error → `NetworkError` classification
+  - Invalid bytes → `InvalidImageError` classification
+  - Duplicate MD5 → `DuplicateImageError` classification
+  - `on_progress` fires per image with correct percentages
+  - ETA is `None` on first call, then extrapolates
+  - `on_progress` exception safety
+  - `search_async` returns a `Result`
+  - `search_async` fires hooks
+  - `search_async` honors `CancelToken`
+- Total: 123 tests passing, 2 network tests skipped by default.
+
 ## [3.3.0] - 2026-06-05
 
 ### Added

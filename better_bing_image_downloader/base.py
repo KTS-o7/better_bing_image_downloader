@@ -21,10 +21,88 @@ from pathlib import Path
 
 import filetype
 
-__all__ = ["ImageEngine", "MAX_FUTURE_TIMEOUT", "VALID_IMAGE_EXTENSIONS"]
+__all__ = [
+    "ImageEngine",
+    "ImageSaveError",
+    "NetworkError",
+    "InvalidImageError",
+    "DuplicateImageError",
+    "WriteError",
+    "MAX_FUTURE_TIMEOUT",
+    "VALID_IMAGE_EXTENSIONS",
+]
 
 # How long a single parallel download future may block before we give up.
 MAX_FUTURE_TIMEOUT = 180.0  # seconds
+
+
+class ImageSaveError(Exception):
+    """Base class for save_image failures surfaced by ``Downloader.search``.
+
+    This is a control-flow exception: it is not a programming error.
+    It exists so that the user's ``on_error`` hook and the
+    ``Result.errors`` list receive a uniform signal whether the
+    failure was a network error, an invalid image body, or a
+    duplicate (same MD5) image.
+
+    As of v3.4.0, the four typed subclasses below give callers a
+    way to distinguish failure reasons without parsing the
+    ``reason`` string. Catching ``ImageSaveError`` continues to
+    catch all of them (Liskov substitution).
+
+    Attributes
+    ----------
+    reason : str
+        Human-readable reason. One of:
+        ``"network"``, ``"invalid_image"``, ``"duplicate"``,
+        ``"write_failed"``.
+    url : str
+        The image URL that failed to save.
+    """
+
+    def __init__(self, reason: str, url: str, message: str = "") -> None:
+        self.reason = reason
+        self.url = url
+        if not message:
+            message = f"image save failed: reason={reason!r} url={url!r}"
+        super().__init__(message)
+
+
+class NetworkError(ImageSaveError):
+    """The HTTP fetch in ``_http_get`` failed (timeout, 5xx, DNS, etc.)."""
+
+    def __init__(self, url: str, message: str = "") -> None:
+        if not message:
+            message = f"network error fetching {url!r}"
+        super().__init__(reason="network", url=url, message=message)
+
+
+class InvalidImageError(ImageSaveError):
+    """The fetched bytes don't look like an image (filetype rejected them)."""
+
+    def __init__(self, url: str, message: str = "") -> None:
+        if not message:
+            message = f"invalid image body at {url!r}"
+        super().__init__(reason="invalid_image", url=url, message=message)
+
+
+class DuplicateImageError(ImageSaveError):
+    """An image with the same MD5 hash has already been saved this run."""
+
+    def __init__(self, url: str, message: str = "") -> None:
+        if not message:
+            message = f"duplicate image (same MD5) at {url!r}"
+        super().__init__(reason="duplicate", url=url, message=message)
+
+
+class WriteError(ImageSaveError):
+    """Failed to create the temp file or write the image bytes to disk."""
+
+    def __init__(self, url: str, message: str = "") -> None:
+        if not message:
+            message = f"failed to write image at {url!r}"
+        super().__init__(reason="write_failed", url=url, message=message)
+
 
 # Extensions we accept when renaming downloaded images. Bing sometimes
 # returns URLs without an extension, so we use this set for the fallback.
@@ -165,30 +243,52 @@ class ImageEngine(ABC):
     def save_image(self, link: str, file_path) -> bool:
         """Download an image to ``file_path`` atomically.
 
-        Returns ``True`` on success, ``False`` on any failure (network,
-        invalid image, or duplicate). On success, ``file_path`` exists
-        with the validated image bytes; on failure, no partial file is
-        left behind.
+        Returns ``True`` on success. On failure, returns ``False`` and
+        logs the error. (As of v3.4.0, the underlying
+        ``_save_image_raising`` raises typed ``ImageSaveError``
+        subclasses; ``save_image`` catches them and returns ``False``
+        for backwards compatibility. ``Downloader.search`` uses the
+        raising variant directly so it can surface typed errors via
+        ``Result.errors`` and ``on_error``.)
+        """
+        try:
+            self._save_image_raising(link, file_path)
+            return True
+        except ImageSaveError as e:
+            # The raising variant already logged the underlying cause.
+            logging.info("Image save skipped: %s", e)
+            return False
+
+    def _save_image_raising(self, link: str, file_path) -> None:
+        """Download an image to ``file_path`` atomically, raising on failure.
+
+        Raises
+        ------
+        NetworkError
+            The HTTP fetch failed (timeout, 5xx, DNS error, etc.).
+        InvalidImageError
+            The fetched bytes don't look like an image.
+        DuplicateImageError
+            An image with the same MD5 hash has already been saved
+            this run.
+        WriteError
+            Failed to create the temp file or write the image bytes.
         """
         try:
             image = self._http_get(link)
         except (urllib.error.HTTPError, urllib.error.URLError) as e:
-            logging.error("Network error while saving image %s: %s", link, e)
-            return False
+            raise NetworkError(url=link, message=f"network error: {e}") from e
         except Exception as e:
-            logging.error("Unexpected error while saving image %s: %s", link, e)
-            return False
+            raise NetworkError(url=link, message=f"unexpected error: {e}") from e
 
         kind = filetype.guess(image)
         if not kind or not kind.mime.startswith("image/"):
-            logging.error("Invalid image, not saving %s", link)
-            return False
+            raise InvalidImageError(url=link)
 
         file_hash = hashlib.md5(image).hexdigest()
         with self._hash_lock:
             if file_hash in self._file_hashes:
-                logging.info("Duplicate image detected (hash match), skipping: %s", link)
-                return False
+                raise DuplicateImageError(url=link)
             self._file_hashes.add(file_hash)
 
         # Atomic write: write to a temp file in the same directory, then
@@ -201,20 +301,17 @@ class ImageEngine(ABC):
                 dir=str(file_path.parent),
             )
         except OSError as e:
-            logging.error("Failed to create temp file for %s: %s", file_path, e)
-            return False
+            raise WriteError(url=link, message=f"mkstemp: {e}") from e
         try:
             with open(fd, "wb") as f:
                 f.write(image)
             shutil.move(tmp_path, file_path)
         except Exception as e:
-            logging.error("Failed to write image %s: %s", file_path, e)
             try:
                 Path(tmp_path).unlink()
             except OSError:
                 pass
-            return False
-        return True
+            raise WriteError(url=link, message=f"write: {e}") from e
 
     def download_image(self, link: str, index: int):
         """Download and save a single image.

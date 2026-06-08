@@ -23,6 +23,7 @@ from __future__ import annotations
 import http.cookiejar
 import logging
 import threading
+import time
 import urllib.request
 from pathlib import Path
 from typing import Callable
@@ -32,7 +33,30 @@ from .bing import Bing
 from .duckduckgo import DuckDuckGo
 from .results import ImageResult, Result
 
-__all__ = ["Downloader", "ImageResult", "Result", "ImageSaveError", "CancelToken"]
+__all__ = [
+    "Downloader",
+    "ImageResult",
+    "Result",
+    "ImageSaveError",
+    "NetworkError",
+    "InvalidImageError",
+    "DuplicateImageError",
+    "WriteError",
+    "CancelToken",
+]
+
+
+# Re-export the typed ImageSaveError subclasses from base.py so they
+# remain accessible as ``better_bing_image_downloader.ImageSaveError``
+# etc. The actual class definitions live in base.py to avoid a
+# circular import (base.py -> downloader.py -> base.py).
+from .base import (  # noqa: E402
+    DuplicateImageError,
+    ImageSaveError,
+    InvalidImageError,
+    NetworkError,
+    WriteError,
+)
 
 
 class CancelToken:
@@ -93,38 +117,14 @@ class CancelToken:
         return f"CancelToken(cancelled={self._cancelled})"
 
 
-class ImageSaveError(Exception):
-    """Raised internally by ``Downloader.search`` when a save_image call
-    returns ``False`` for a known reason.
-
-    This is a control-flow exception: it is not a programming error.
-    It exists so that the user's ``on_error`` hook and the
-    ``Result.errors`` list receive a uniform signal whether the
-    failure was a network error, an invalid image body, or a
-    duplicate (same MD5) image.
-
-    Attributes
-    ----------
-    reason : str
-        Human-readable reason. One of:
-        ``"network"``, ``"invalid_image"``, ``"duplicate"``,
-        ``"write_failed"``.
-    url : str
-        The image URL that failed to save.
-    """
-
-    def __init__(self, reason: str, url: str, message: str = "") -> None:
-        self.reason = reason
-        self.url = url
-        if not message:
-            message = f"image save failed: reason={reason!r} url={url!r}"
-        super().__init__(message)
-
-
 HookOnImage = Callable[[ImageResult], None]
 HookOnError = Callable[[str, BaseException], None]
 HookOnEngineStart = Callable[[str, str], None]  # (engine, query)
 HookOnEngineDone = Callable[[str, Result], None]  # (engine, result)
+
+# Progress hook signature: (percent, downloaded, total, eta_seconds).
+# ``eta_seconds`` is None until we have at least one timing sample.
+HookOnProgress = Callable[[float, int, int, float | None], None]
 
 
 class Downloader:
@@ -167,6 +167,7 @@ class Downloader:
         on_error: HookOnError | None = None,
         on_engine_start: HookOnEngineStart | None = None,
         on_engine_done: HookOnEngineDone | None = None,
+        on_progress: HookOnProgress | None = None,
     ) -> None:
         # --- Session: shared cookie jar + connection-pooled opener ---
         # The cookie jar is critical for DuckDuckGo: the vqd token is
@@ -185,6 +186,7 @@ class Downloader:
         self.on_error = on_error
         self.on_engine_start = on_engine_start
         self.on_engine_done = on_engine_done
+        self.on_progress = on_progress
 
         # --- Per-instance engine registry ---
         # Copy from the class default so per-instance ``register()``
@@ -354,20 +356,36 @@ class Downloader:
         # actually invoked (not skipped due to resume). Useful for
         # debugging.
         save_attempts = 0
+        # ``progress_state`` tracks timing samples for ETA
+        # computation. We need at least 2 samples (one for the
+        # previous download, one for the current) to extrapolate.
+        # ``_start_time`` is the time of the first sample,
+        # ``_last_time`` is the time of the most recent sample,
+        # ``_last_count`` is the ``download_count`` at the time of
+        # the most recent sample.
+        progress_state: dict[str, float | int] = {
+            "_start_time": time.monotonic(),
+            "_last_time": time.monotonic(),
+            "_last_count": 0,
+        }
 
         # Monkey-patch both save_image and download_image to count
         # calls and to capture every successful save and every error.
-        original_save = engine_obj.save_image
+        # As of v3.4.0, we use ``_save_image_raising`` directly so
+        # the wrapper receives typed ``ImageSaveError`` subclasses
+        # (NetworkError, InvalidImageError, DuplicateImageError,
+        # WriteError) instead of a generic ``False`` return.
+        original_save_raising = engine_obj._save_image_raising
         original_download = engine_obj.download_image
 
         def save_with_hooks(link: str, file_path) -> bool:
             nonlocal save_attempts
             save_attempts += 1
             try:
-                ok = original_save(link, file_path)
-            except Exception as exc:
-                # save_image raised (e.g. an unhandled exception bubbled
-                # up). Surface via on_error and Result.errors.
+                original_save_raising(link, file_path)
+            except ImageSaveError as exc:
+                # Typed save failure (v3.4.0+). Surface via on_error
+                # and Result.errors.
                 errors.append((link, exc))
                 if self.on_error:
                     try:
@@ -375,24 +393,13 @@ class Downloader:
                     except Exception:
                         logging.exception("on_error hook raised; continuing")
                 return False
-            if not ok:
-                # save_image returned False for a known reason
-                # (network, invalid mime, duplicate, or write
-                # failure). Previously this was silent data loss
-                # (3.2.0). In 3.2.1 we surface it via on_error and
-                # Result.errors so a library user can react.
-                #
-                # TODO(3.3.0): change save_image to raise specific
-                # ImageSaveError subclasses (NetworkError,
-                # InvalidImageError, DuplicateImageError) so callers
-                # can distinguish them. For now, the reason is
-                # "save_failed" — generic, but at least the user
-                # gets a signal.
-                save_exc = ImageSaveError(reason="save_failed", url=link)
-                errors.append((link, save_exc))
+            except Exception as exc:
+                # Unhandled exception in save_image (e.g. a bug in
+                # the engine subclass). Surface generically.
+                errors.append((link, exc))
                 if self.on_error:
                     try:
-                        self.on_error(link, save_exc)
+                        self.on_error(link, exc)
                     except Exception:
                         logging.exception("on_error hook raised; continuing")
                 return False
@@ -422,6 +429,19 @@ class Downloader:
                     self.on_image(ir)
                 except Exception:
                     logging.exception("on_image hook raised; continuing")
+            # Fire the on_progress hook (v3.4.0+). The engine's
+            # ``download_count`` is incremented inside
+            # ``download_image`` *after* ``save_image`` returns,
+            # so we add 1 to account for the image we just saved.
+            if self.on_progress:
+                done = engine_obj.download_count + 1
+                total = limit
+                pct = (done / total * 100.0) if total > 0 else 0.0
+                eta = _compute_eta(progress_state, done, total)
+                try:
+                    self.on_progress(pct, done, total, eta)
+                except Exception:
+                    logging.exception("on_progress hook raised; continuing")
             return True
 
         # ``save_image`` is defined on the base ``ImageEngine`` class,
@@ -481,6 +501,110 @@ class Downloader:
                 logging.exception("on_engine_done hook raised; continuing")
 
         return result
+
+    async def search_async(
+        self,
+        query: str,
+        limit: int = 100,
+        output_dir: str | Path = "dataset",
+        engine: str = "bing",
+        badsites: list[str] | None = None,
+        name: str = "Image",
+        max_workers: int = 4,
+        force_replace: bool = False,
+        timeout: int = 60,
+        verbose: bool = False,
+        image_filter: str = "",
+        mkt: str = "en-US",
+        ddg_safe_search: str = "moderate",
+        ddg_region: str = "us-en",
+        adult_filter_off: bool = False,
+        cancel: CancelToken | None = None,
+    ) -> Result:
+        """Async wrapper around :meth:`search`.
+
+        Runs the (blocking) ``search()`` in a worker thread via
+        :func:`asyncio.to_thread`, so it works with the stdlib-only
+        urllib-based engines without requiring an event loop on
+        the engine side. Returns the same :class:`Result`.
+
+        Use this in async code (FastAPI, aiohttp, Jupyter with
+        ``top-level await``) so a long search doesn't block the
+        event loop.
+
+        Example
+        -------
+        >>> import asyncio
+        >>> from better_bing_image_downloader import Downloader
+        >>>
+        >>> async def main():
+        ...     dl = Downloader()
+        ...     result = await dl.search_async("red panda", limit=10)
+        ...     print(result.count)
+        >>>
+        >>> asyncio.run(main())
+        """
+        import asyncio
+
+        # ``asyncio.to_thread`` is the right call here:
+        # - it doesn't require the function to be a coroutine
+        # - it gives back the GIL so the event loop can serve
+        #   other tasks while the search runs
+        # - it works in any context (no global executor needed)
+        return await asyncio.to_thread(
+            self.search,
+            query=query,
+            limit=limit,
+            output_dir=output_dir,
+            engine=engine,
+            badsites=badsites,
+            name=name,
+            max_workers=max_workers,
+            force_replace=force_replace,
+            timeout=timeout,
+            verbose=verbose,
+            image_filter=image_filter,
+            mkt=mkt,
+            ddg_safe_search=ddg_safe_search,
+            ddg_region=ddg_region,
+            adult_filter_off=adult_filter_off,
+            cancel=cancel,
+        )
+
+
+def _compute_eta(state: dict[str, float | int], done: int, total: int) -> float | None:
+    """Estimate seconds remaining based on timing samples.
+
+    Returns ``None`` until we have at least 2 samples (the first
+    download can't be extrapolated — we don't know the rate yet).
+    On the first call, the state ``_last_count`` is 0; if the
+    new ``done`` is also 0, we have no signal at all. Once we've
+    seen at least one completed download, subsequent calls
+    extrapolate based on the rate of progress.
+    """
+    now = time.monotonic()
+    last_time = float(state["_last_time"])
+    last_count = int(state["_last_count"])
+    is_first_call = last_count == 0 and state.get("_initialized", False) is False
+    if is_first_call:
+        # First call: we don't have a rate yet. Just record the
+        # state for the next call.
+        state["_last_time"] = now
+        state["_last_count"] = done
+        state["_initialized"] = True
+        return None
+    if done == last_count:
+        return None
+    elapsed = now - last_time
+    if elapsed <= 0:
+        return None
+    rate = (done - last_count) / elapsed
+    remaining = total - done
+    if rate <= 0 or remaining <= 0:
+        return None
+    state["_last_time"] = now
+    state["_last_count"] = done
+    return remaining / rate
 
 
 def _guess_mime(path: Path) -> str:

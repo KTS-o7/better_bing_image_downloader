@@ -1,6 +1,13 @@
 import logging
 
-from .base import ImageEngine
+from .base import (
+    DuplicateImageError,
+    ImageEngine,
+    ImageSaveError,
+    InvalidImageError,
+    NetworkError,
+    WriteError,
+)
 from .bing import Bing
 from .download import downloader
 from .downloader import CancelToken, Downloader
@@ -12,9 +19,14 @@ __all__ = [
     "Bing",
     "CancelToken",
     "Downloader",
+    "DuplicateImageError",
     "ImageEngine",
     "ImageResult",
+    "ImageSaveError",
+    "InvalidImageError",
+    "NetworkError",
     "Result",
+    "WriteError",
     "downloader",
 ]
 

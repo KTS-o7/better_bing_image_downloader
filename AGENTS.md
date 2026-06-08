@@ -13,7 +13,7 @@ repository. Read this before making non-trivial changes.
   `multidownloader` path.
 - **No CI is configured** (per the maintainer's request). Lint/type/test
   is run locally before pushing.
-- **Tests:** 112 passing, 2 network tests skipped by default
+- **Tests:** 123 passing, 2 network tests skipped by default
   (`BBID_RUN_NETWORK_TESTS=1` to enable).
 - **Linters:** `black` (formatter), `ruff` (lint), `mypy` (types).
   All three run via pre-commit.
@@ -81,7 +81,7 @@ optional but useful (`feat(duckduckgo): add region code`).
 - **Minor** (3.x.0): new features, backwards-compatible.
 - **Major** (x.0.0): breaking changes.
 
-The current version is **3.3.0**. Bump in `pyproject.toml` and
+The current version is **3.4.0**. Bump in `pyproject.toml` and
 `CHANGELOG.md` when cutting a release. Releases are cut by:
 1. Committing on `main`.
 2. Tagging (`git tag -a v3.X.Y -m "v3.X.Y: summary"`).
@@ -117,6 +117,12 @@ The current version is **3.3.0**. Bump in `pyproject.toml` and
   should be added in a backwards-compatible way — e.g. as a new
   return type on a new method (`Downloader.search()`), not by
   repurposing the existing `int` from `downloader()`.
+- **Don't change `save_image`'s public bool return contract**
+  again. As of v3.4.0, `save_image` is the catching wrapper
+  (returns `False` on failure). The typed-exception variant
+  lives in `_save_image_raising` and is what
+  `Downloader.search` calls. Adding more variants is fine; flipping
+  the bool contract is not.
 - **Don't bypass the engine registry** (`Downloader.register`) to
   plug in a custom engine. Monkey-patching `_build_engine()` (which
   was removed in 3.2.0 anyway) or `Downloader._DEFAULT_REGISTRY` is

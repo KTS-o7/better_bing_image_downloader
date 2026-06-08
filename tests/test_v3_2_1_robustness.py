@@ -207,9 +207,9 @@ def test_save_image_returning_false_calls_on_error(tmp_path: Path) -> None:
 def test_network_error_calls_on_error(tmp_path: Path) -> None:
     """A network failure in _http_get must also surface as on_error.
 
-    The base ``save_image`` catches ``URLError`` and returns ``False``;
-    the ``Downloader.search`` wrapper converts that to an
-    ``ImageSaveError`` so users see a uniform failure signal.
+    As of v3.4.0, the wrapper raises a typed ``NetworkError``
+    (subclass of ``ImageSaveError``) so callers can catch the
+    specific failure mode.
     """
     import urllib.error
 
@@ -233,10 +233,8 @@ def test_network_error_calls_on_error(tmp_path: Path) -> None:
 
     assert len(error_calls) == 1
     assert error_calls[0][0] == "https://example.test/1.jpg"
-    # The error type is ImageSaveError (the wrapper's control-flow
-    # exception). The underlying URLError is logged inside save_image
-    # but not propagated — that's an intentional design choice to
-    # keep the save_image contract stable across releases.
-    assert error_calls[0][1] == "ImageSaveError"
+    # v3.4.0: the wrapper raises typed ImageSaveError subclasses.
+    # NetworkError is the specific type for HTTP failures.
+    assert error_calls[0][1] == "NetworkError"
     assert result.count == 0
     assert len(result.errors) == 1

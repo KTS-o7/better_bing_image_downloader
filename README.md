@@ -229,6 +229,71 @@ print(f"Saved {result.count} images; cancelled={result.cancelled}")
 between searches). The `Result` returned from a cancelled search
 has `cancelled=True` and reflects whatever was completed.
 
+#### Async usage
+
+For web services, notebooks with `top-level await`, or any async
+context, use `search_async()`:
+
+```python
+import asyncio
+from better_bing_image_downloader import Downloader
+
+async def main():
+    dl = Downloader()
+    result = await dl.search_async("red panda", limit=10, engine="duckduckgo")
+    print(f"Saved {result.count} images")
+
+asyncio.run(main())
+```
+
+`search_async` runs the existing `search()` in a worker thread via
+`asyncio.to_thread()`, so it doesn't block the event loop. Hooks,
+the `CancelToken`, and `on_progress` all work the same way.
+
+#### Progress callback
+
+If you want a progress bar with percentage and ETA, set `on_progress`:
+
+```python
+from better_bing_image_downloader import Downloader
+
+dl = Downloader()
+dl.on_progress = lambda pct, done, total, eta: print(
+    f"\r{pct:5.1f}% ({done}/{total}) ETA: {eta:.0f}s" if eta else f"\r{pct:5.1f}%"
+)
+result = dl.search("red panda", limit=100, engine="duckduckgo")
+```
+
+`on_progress(percent, downloaded, total, eta_seconds)` fires after
+each successful download. `eta_seconds` is `None` for the first
+download (one sample isn't enough to extrapolate).
+
+#### Typed error handling
+
+As of 3.4.0, `save_image` failures are typed so you can handle
+specific cases:
+
+```python
+from better_bing_image_downloader import (
+    Downloader, NetworkError, InvalidImageError, DuplicateImageError, WriteError,
+)
+
+dl = Downloader()
+def classify(url, exc):
+    if isinstance(exc, NetworkError):
+        print(f"network: {url}")
+    elif isinstance(exc, InvalidImageError):
+        print(f"bad mime: {url}")
+    elif isinstance(exc, DuplicateImageError):
+        print(f"duplicate: {url}")
+    elif isinstance(exc, WriteError):
+        print(f"disk: {url}")
+dl.on_error = classify
+```
+
+Catching the base `ImageSaveError` continues to work and matches
+all four subclasses (Liskov substitution).
+
 ### Resume behaviour
 
 By default (`force_replace=False`), re-running the same query skips already-downloaded files and downloads only what's missing:
@@ -418,6 +483,14 @@ main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
 
 ## Changelog
+
+### 3.4.0 (typed errors + progress + async)
+
+- **New:** Typed `ImageSaveError` subclasses — `NetworkError`, `InvalidImageError`, `DuplicateImageError`, `WriteError`. Catching `ImageSaveError` still catches all of them
+- **New:** `on_progress(percent, downloaded, total, eta_seconds)` hook on `Downloader` — powers progress bars and ETA displays
+- **New:** `Downloader.search_async()` — async wrapper around `search()` via `asyncio.to_thread`. No new dependencies. Returns the same `Result`
+- **Changed:** `save_image` is now a catching wrapper; new `_save_image_raising()` is the typed-exception variant. Backwards compatible.
+- **Tests:** 112 → 123 (added 11 feature tests in `tests/test_v3_4_0_features.py`)
 
 ### 3.3.0 (no-results signal + cancellation)
 
