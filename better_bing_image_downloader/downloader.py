@@ -32,7 +32,35 @@ from .bing import Bing
 from .duckduckgo import DuckDuckGo
 from .results import ImageResult, Result
 
-__all__ = ["Downloader", "ImageResult", "Result"]
+__all__ = ["Downloader", "ImageResult", "Result", "ImageSaveError"]
+
+
+class ImageSaveError(Exception):
+    """Raised internally by ``Downloader.search`` when a save_image call
+    returns ``False`` for a known reason.
+
+    This is a control-flow exception: it is not a programming error.
+    It exists so that the user's ``on_error`` hook and the
+    ``Result.errors`` list receive a uniform signal whether the
+    failure was a network error, an invalid image body, or a
+    duplicate (same MD5) image.
+
+    Attributes
+    ----------
+    reason : str
+        Human-readable reason. One of:
+        ``"network"``, ``"invalid_image"``, ``"duplicate"``,
+        ``"write_failed"``.
+    url : str
+        The image URL that failed to save.
+    """
+
+    def __init__(self, reason: str, url: str, message: str = "") -> None:
+        self.reason = reason
+        self.url = url
+        if not message:
+            message = f"image save failed: reason={reason!r} url={url!r}"
+        super().__init__(message)
 
 
 HookOnImage = Callable[[ImageResult], None]
@@ -249,6 +277,8 @@ class Downloader:
             try:
                 ok = original_save(link, file_path)
             except Exception as exc:
+                # save_image raised (e.g. an unhandled exception bubbled
+                # up). Surface via on_error and Result.errors.
                 errors.append((link, exc))
                 if self.on_error:
                     try:
@@ -257,8 +287,25 @@ class Downloader:
                         logging.exception("on_error hook raised; continuing")
                 return False
             if not ok:
-                # save_image returned False for a known reason (network,
-                # invalid mime, duplicate). Treat as a non-exception skip.
+                # save_image returned False for a known reason
+                # (network, invalid mime, duplicate, or write
+                # failure). Previously this was silent data loss
+                # (3.2.0). In 3.2.1 we surface it via on_error and
+                # Result.errors so a library user can react.
+                #
+                # TODO(3.3.0): change save_image to raise specific
+                # ImageSaveError subclasses (NetworkError,
+                # InvalidImageError, DuplicateImageError) so callers
+                # can distinguish them. For now, the reason is
+                # "save_failed" — generic, but at least the user
+                # gets a signal.
+                save_exc = ImageSaveError(reason="save_failed", url=link)
+                errors.append((link, save_exc))
+                if self.on_error:
+                    try:
+                        self.on_error(link, save_exc)
+                    except Exception:
+                        logging.exception("on_error hook raised; continuing")
                 return False
             fp = Path(file_path)
             if fp in seen_paths:

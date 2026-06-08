@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-06-05
+
+### Fixed
+
+- `Downloader.search()` no longer silently drops failed image saves.
+  In 3.2.0, when `save_image` returned `False` (network error,
+  invalid image body, duplicate, or write failure), the failure was
+  logged at `ERROR` level but not surfaced to library users. In
+  3.2.1, the `Downloader.search` wrapper now:
+  - appends `(url, ImageSaveError(reason="save_failed", url=url))`
+    to `Result.errors`
+  - invokes the user's `on_error` hook (if set)
+  - This matches the behavior of unhandled exceptions in
+    `save_image`, which were already surfaced.
+- New `ImageSaveError` exception class (in
+  `better_bing_image_downloader.ImageSaveError`) is the public
+  surface for "save_image returned False". It carries a `reason`
+  string and a `url` attribute. For now, `reason` is always
+  `"save_failed"`; specific reasons (`"network"`, `"invalid_image"`,
+  `"duplicate"`, `"write_failed"`) will be added in 3.3.0 when
+  `save_image` is changed to raise typed exceptions.
+
+### Tests
+
+- 6 new tests in `tests/test_v3_2_1_robustness.py`:
+  - `on_image` exception safety
+  - `on_error` exception safety
+  - 5-thread concurrent `search()` corruption check
+  - 50-thread concurrent `register()` race check
+  - `save_image` returning `False` (invalid + duplicate) calls
+    `on_error`
+  - Network error in `_http_get` calls `on_error`
+- Total: 105 tests passing, 2 network tests skipped by default.
+
 ## [3.2.0] - 2026-06-05
 
 ### Added

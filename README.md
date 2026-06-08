@@ -370,6 +370,11 @@ main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 
 ## Changelog
 
+### 3.2.1 (robustness patch)
+
+- **Fix:** `Downloader.search()` no longer silently drops failed image saves. When `save_image` returns `False` (network error, invalid image, duplicate, or write failure), the failure is now surfaced via the user's `on_error` hook and `Result.errors`. New `ImageSaveError` exception class is the public surface for this signal.
+- **Tests:** 99 → 105 (added 6 robustness tests in `tests/test_v3_2_1_robustness.py`)
+
 ### 3.2.0 (embeddable API)
 
 - **New:** `Downloader` class — the recommended entry point for library users. Owns a session (cookie jar + opener), an engine registry, and lifecycle hooks
