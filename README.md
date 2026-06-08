@@ -180,6 +180,55 @@ result = dl.search("bergsteiger", limit=5, engine="myengine")
 so the registry only accepts engines that implement the expected
 `run()` / `download_image()` contract.
 
+#### Distinguishing "no results" from "all skipped"
+
+In 3.2.x, a query that returned zero results was indistinguishable
+from one where all candidates were already on disk (resume). In
+3.3.0, `Result.no_results_found` makes the distinction explicit:
+
+```python
+result = dl.search("xyz_no_such_query", limit=10, engine="duckduckgo")
+if result.no_results_found:
+    print("Search returned no candidates — try different terms")
+elif result.count == 0 and result.skipped > 0:
+    print("All candidates were already downloaded")
+elif result.count == 0 and len(result.errors) > 0:
+    print(f"All downloads failed: {result.errors}")
+```
+
+#### Cancelling a long-running search
+
+For web services, notebooks, or anywhere you might want to abort
+a long-running search, use a `CancelToken`:
+
+```python
+import threading
+from better_bing_image_downloader import Downloader, CancelToken
+
+dl = Downloader()
+token = CancelToken()
+
+def cancel_after(tok, delay):
+    import time
+    time.sleep(delay)
+    tok.cancel()
+
+# Cancel after 1 second
+threading.Thread(target=cancel_after, args=(token, 1.0)).start()
+
+result = dl.search(
+    "red panda",
+    limit=10_000,           # user asked for a lot
+    engine="duckduckgo",
+    cancel=token,           # cooperative engines will abort
+)
+print(f"Saved {result.count} images; cancelled={result.cancelled}")
+```
+
+`CancelToken` is thread-safe and reusable (call `token.reset()`
+between searches). The `Result` returned from a cancelled search
+has `cancelled=True` and reflects whatever was completed.
+
 ### Resume behaviour
 
 By default (`force_replace=False`), re-running the same query skips already-downloaded files and downloads only what's missing:
@@ -369,6 +418,15 @@ main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
 
 ## Changelog
+
+### 3.3.0 (no-results signal + cancellation)
+
+- **New:** `Result.no_results_found` — `True` when the search backend returned zero candidates. Distinguishes "search returned nothing" from "search returned stuff but nothing was saved"
+- **New:** `CancelToken` class and `Downloader.search(cancel=token)` — abort a long-running search mid-flight by calling `token.cancel()` from another thread or a signal handler
+- **New:** `Result.cancelled` — `True` if a `CancelToken` aborted the run
+- **New:** `ImageEngine.is_cancelled()` helper for custom engines
+- **Fix:** `Result.skipped` is now clamped to 0 (no negative counts from misbehaving custom engines)
+- **Tests:** 105 → 112 (added 7 feature tests in `tests/test_v3_3_0_features.py`)
 
 ### 3.2.1 (robustness patch)
 

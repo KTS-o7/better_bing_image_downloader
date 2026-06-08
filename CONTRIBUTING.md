@@ -27,7 +27,7 @@ needed to test the DuckDuckGo engine locally.
 ## Running tests
 
 ```bash
-# Run the full test suite (105 tests, 2 network tests skipped by default)
+# Run the full test suite (112 tests, 2 network tests skipped by default)
 pytest
 
 # Run with coverage

@@ -3,13 +3,14 @@ import logging
 from .base import ImageEngine
 from .bing import Bing
 from .download import downloader
-from .downloader import Downloader
+from .downloader import CancelToken, Downloader
 from .results import ImageResult, Result
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "Bing",
+    "CancelToken",
     "Downloader",
     "ImageEngine",
     "ImageResult",

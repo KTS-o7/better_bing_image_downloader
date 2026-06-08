@@ -102,6 +102,7 @@ class DuckDuckGo(ImageEngine):
         force_replace: bool = False,
         safe_search: str = "moderate",
         region: str = "us-en",
+        cancel=None,
     ):
         super().__init__(
             query=query,
@@ -113,6 +114,7 @@ class DuckDuckGo(ImageEngine):
             name=name,
             max_workers=max_workers,
             force_replace=force_replace,
+            cancel=cancel,
         )
         if safe_search not in self.VALID_SAFE_SEARCH:
             raise ValueError(
@@ -262,6 +264,13 @@ class DuckDuckGo(ImageEngine):
         offset = 0
         page_num = 0
         while self._slots_used < self.limit:
+            # Check the cancel token (v3.3.0+). Returns immediately if
+            # the user called ``cancel_token.cancel()`` from another
+            # thread.
+            if self.is_cancelled():
+                if self.verbose:
+                    logging.info("[!] Cancellation requested; stopping.")
+                return
             if self.verbose:
                 logging.info("[!]Indexing page: %d (offset=%d)", page_num + 1, offset)
             try:

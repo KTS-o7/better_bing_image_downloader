@@ -32,7 +32,65 @@ from .bing import Bing
 from .duckduckgo import DuckDuckGo
 from .results import ImageResult, Result
 
-__all__ = ["Downloader", "ImageResult", "Result", "ImageSaveError"]
+__all__ = ["Downloader", "ImageResult", "Result", "ImageSaveError", "CancelToken"]
+
+
+class CancelToken:
+    """A simple thread-safe one-shot cancellation flag.
+
+    Pass an instance to :meth:`Downloader.search` via the ``cancel=``
+    keyword argument; call :meth:`cancel` from another thread (or a
+    signal handler) to abort the in-flight search. Engines that
+    cooperate with the token (Bing, DuckDuckGo as of v3.3.0) will
+    check it between page fetches and stop cleanly. The partial
+    :class:`Result` is returned with ``result.cancelled = True``.
+
+    Example
+    -------
+
+    >>> import threading
+    >>> from better_bing_image_downloader import Downloader
+    >>> from better_bing_image_downloader.downloader import CancelToken
+    >>>
+    >>> dl = Downloader()
+    >>> token = CancelToken()
+    >>>
+    >>> def cancel_after(tok, delay):
+    ...     import time
+    ...     time.sleep(delay)
+    ...     tok.cancel()
+    >>>
+    >>> threading.Thread(target=cancel_after, args=(token, 1.0)).start()
+    >>> result = dl.search("red panda", limit=1000, engine="duckduckgo", cancel=token)
+    >>> result.cancelled
+    True
+    """
+
+    __slots__ = ("_cancelled", "_lock")
+
+    def __init__(self) -> None:
+        self._cancelled = False
+        self._lock = threading.Lock()
+
+    @property
+    def cancelled(self) -> bool:
+        """``True`` once :meth:`cancel` has been called."""
+        # Reading is racy without the lock, but the worst case is
+        # the engine checks one iteration too many — which is fine.
+        return self._cancelled
+
+    def cancel(self) -> None:
+        """Mark this token as cancelled. Idempotent."""
+        with self._lock:
+            self._cancelled = True
+
+    def reset(self) -> None:
+        """Reset the token so it can be reused for a new search."""
+        with self._lock:
+            self._cancelled = False
+
+    def __repr__(self) -> str:
+        return f"CancelToken(cancelled={self._cancelled})"
 
 
 class ImageSaveError(Exception):
@@ -215,18 +273,30 @@ class Downloader:
         ddg_safe_search: str = "moderate",
         ddg_region: str = "us-en",
         adult_filter_off: bool = False,
+        cancel: CancelToken | None = None,
     ) -> Result:
         """Run a search and return a :class:`Result`.
 
         Parameters mirror the legacy module-level :func:`downloader`
         function; the only behavioural differences are the return type
         (``Result`` instead of ``int``) and that hooks are fired.
+
+        Parameters
+        ----------
+        cancel : CancelToken | None
+            Optional cancellation token. Pass an instance and call
+            ``token.cancel()`` from another thread (or a signal
+            handler) to abort the search. Cooperative engines
+            (Bing, DuckDuckGo) check the token between page fetches
+            and stop cleanly. The partial :class:`Result` is
+            returned with ``result.cancelled = True``.
         """
         image_dir = Path(output_dir) / query
         image_dir.mkdir(parents=True, exist_ok=True)
 
         adult = "off" if adult_filter_off else "moderate"
 
+        engine_kwargs: dict[str, object] = {}
         if engine == "bing":
             engine_kwargs = {
                 "adult": adult,
@@ -238,8 +308,11 @@ class Downloader:
                 "safe_search": ddg_safe_search,
                 "region": ddg_region,
             }
-        else:
-            engine_kwargs = {}
+
+        # Pass the cancel token to the engine so cooperative engines
+        # (Bing, DuckDuckGo) can abort between page fetches.
+        if cancel is not None:
+            engine_kwargs["cancel"] = cancel
 
         engine_obj = self.build_engine(
             engine_name=engine,
@@ -268,12 +341,28 @@ class Downloader:
         images: list[ImageResult] = []
         errors: list[tuple[str, BaseException]] = []
         seen_paths: set[Path] = set()
+        # ``download_image_calls`` counts every time the engine
+        # asked ``download_image`` to consider a candidate. We use
+        # this to distinguish "no candidates fetched" from
+        # "all candidates skipped" — both report ``_slots_used == 0``
+        # but only the former means the search backend returned
+        # nothing. (Resume-skip paths in download_image return
+        # 0 before save_image is called, so save_attempts alone
+        # would conflate the two cases.)
+        download_image_calls = 0
+        # ``save_attempts`` is the number of times save_image was
+        # actually invoked (not skipped due to resume). Useful for
+        # debugging.
+        save_attempts = 0
 
-        # Monkey-patch the engine's save_image to capture every successful
-        # save and every error. We capture by wrapping the bound method.
+        # Monkey-patch both save_image and download_image to count
+        # calls and to capture every successful save and every error.
         original_save = engine_obj.save_image
+        original_download = engine_obj.download_image
 
         def save_with_hooks(link: str, file_path) -> bool:
+            nonlocal save_attempts
+            save_attempts += 1
             try:
                 ok = original_save(link, file_path)
             except Exception as exc:
@@ -340,19 +429,45 @@ class Downloader:
         # it. Suppress only the method-assign warning.
         engine_obj.save_image = save_with_hooks  # type: ignore[method-assign]
 
+        def download_with_count(link: str, index: int):
+            nonlocal download_image_calls
+            download_image_calls += 1
+            return original_download(link, index)
+
+        # Wrap download_image to count how many candidates the engine
+        # considered (including resume-skips).
+        engine_obj.download_image = download_with_count  # type: ignore[method-assign]
+
         try:
             engine_obj.run()
         finally:
             # Always surface what we have, even on exception.
             pass
 
+        # Compute the run's high-level outcome flags.
+        # ``no_results_found`` is True when the engine considered
+        # zero candidate URLs. This distinguishes "the search
+        # returned nothing" from "the search returned stuff but
+        # it was all skipped or failed" — a distinction that was
+        # invisible in 3.2.0 and earlier.
+        no_results_found = download_image_calls == 0
+        cancelled = cancel is not None and cancel.cancelled
+
+        # ``skipped`` is clamped to zero: if a custom engine
+        # incremented ``download_count`` without ``_slots_used`` (or
+        # vice versa), the subtraction can go negative. We don't
+        # want a nonsensical negative count in the result.
+        skipped = max(0, engine_obj._slots_used - engine_obj.download_count)
+
         result = Result(
             query=query,
             engine=engine,
             output_dir=image_dir,
             images=images,
-            skipped=engine_obj._slots_used - engine_obj.download_count,
+            skipped=skipped,
             errors=errors,
+            no_results_found=no_results_found,
+            cancelled=cancelled,
         )
         # Attach the engine instance to the Result so the legacy
         # ``downloader()`` function can read ``engine.download_count``

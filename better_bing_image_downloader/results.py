@@ -74,9 +74,32 @@ class Result:
         (``force_replace=False`` and a file with that index was present).
     errors : list[tuple[str, BaseException]]
         ``(url, exception)`` pairs for each download that failed.
+    no_results_found : bool
+        ``True`` if the engine reported it found zero candidate URLs
+        (i.e. the search backend returned no results). ``False`` if
+        the engine found at least one URL, even if all of them were
+        skipped (resume) or failed. This distinguishes
+        "search returned nothing" from "search returned stuff but
+        nothing was saved" — a distinction that was invisible in
+        3.2.0 and earlier.
+    cancelled : bool
+        ``True`` if the search was aborted via a :class:`CancelToken`
+        before reaching the requested limit. The ``images``,
+        ``skipped``, and ``errors`` lists reflect whatever was
+        completed up to the cancellation point.
     """
 
-    __slots__ = ("query", "engine", "output_dir", "images", "skipped", "errors", "_engine")
+    __slots__ = (
+        "query",
+        "engine",
+        "output_dir",
+        "images",
+        "skipped",
+        "errors",
+        "no_results_found",
+        "cancelled",
+        "_engine",
+    )
     _engine: ImageEngine | None  # type annotation for mypy
 
     def __init__(
@@ -87,6 +110,8 @@ class Result:
         images: list[ImageResult] | None = None,
         skipped: int = 0,
         errors: list[tuple[str, BaseException]] | None = None,
+        no_results_found: bool = False,
+        cancelled: bool = False,
     ) -> None:
         self.query = query
         self.engine = engine
@@ -94,6 +119,12 @@ class Result:
         self.images: list[ImageResult] = list(images) if images else []
         self.skipped = int(skipped)
         self.errors: list[tuple[str, BaseException]] = list(errors) if errors else []
+        # ``no_results_found`` is True if the engine ran zero pages /
+        # zero candidates. Set by ``Downloader.search`` based on
+        # whether the engine made any save attempt at all.
+        self.no_results_found = no_results_found
+        # ``cancelled`` is True if a CancelToken aborted the run.
+        self.cancelled = cancelled
         # ``_engine`` is set by ``Downloader.search()`` to expose the
         # underlying engine instance for advanced users. Always present
         # in real ``Downloader``-produced Results; ``None`` when a
@@ -125,8 +156,14 @@ class Result:
         return self._engine
 
     def __repr__(self) -> str:
+        flags = []
+        if self.no_results_found:
+            flags.append("no_results_found")
+        if self.cancelled:
+            flags.append("cancelled")
+        flag_str = f", flags={flags}" if flags else ""
         return (
             f"Result(query={self.query!r}, engine={self.engine!r}, "
             f"count={self.count}, skipped={self.skipped}, "
-            f"errors={len(self.errors)})"
+            f"errors={len(self.errors)}{flag_str})"
         )

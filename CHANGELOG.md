@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-06-05
+
+### Added
+
+- **`Result.no_results_found` flag** (bool). True when the search
+  backend returned zero candidate URLs. Previously, a query that
+  returned nothing was indistinguishable from one where all
+  candidates were skipped (resume) or all failed (errors). Now
+  callers can check `result.no_results_found` to tell them apart.
+- **`CancelToken` class** for mid-run cancellation. Pass
+  `cancel=token` to `Downloader.search()`; call `token.cancel()`
+  from another thread (or a signal handler) to abort the run.
+  Cooperative engines (Bing, DuckDuckGo) check the token between
+  page fetches and stop cleanly. The partial `Result` is returned
+  with `result.cancelled = True`.
+- **`Result.cancelled` flag** (bool). True if a `CancelToken`
+  aborted the run. The `images`, `skipped`, and `errors` lists
+  reflect whatever was completed up to the cancellation point.
+- **`ImageEngine.is_cancelled()` helper** method on the base class.
+  Engines that subclass `ImageEngine` should call this in their
+  `run()` loop to honor the cancel token.
+- **Clamped `Result.skipped`**: if a custom engine subclass
+  increments `download_count` without `_slots_used` (or vice
+  versa), the subtraction `slots_used - download_count` could
+  go negative. We now clamp to 0 so users don't see a
+  nonsensical negative count.
+- **`CancelToken` exposed at the top level**:
+  `from better_bing_image_downloader import CancelToken`.
+
+### Tests
+
+- 7 new tests in `tests/test_v3_3_0_features.py`:
+  - `no_results_found` True when engine ran zero pages
+  - `no_results_found` False on success
+  - `no_results_found` False on all-skipped (resume) case
+  - `CancelToken` class basics (cancel, cancelled, reset)
+  - `search()` honors a pre-cancelled token
+  - `search()` honors a token cancelled mid-run (threaded)
+  - Cancelled result is well-formed
+- Total: 112 tests passing, 2 network tests skipped by default.
+
 ## [3.2.1] - 2026-06-05
 
 ### Fixed

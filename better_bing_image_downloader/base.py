@@ -77,6 +77,7 @@ class ImageEngine(ABC):
         name: str = "Image",
         max_workers: int = 4,
         force_replace: bool = False,
+        cancel=None,
     ):
         # Abstract base class — subclasses MUST override ``run()``.
         # The abstractmethod below is what makes
@@ -96,6 +97,12 @@ class ImageEngine(ABC):
         self.image_name = name
         self.max_workers = max(1, min(max_workers, 16))
         self.force_replace = force_replace
+        # ``cancel`` is an optional ``CancelToken`` (from
+        # ``downloader.py``). The base class stores it; concrete
+        # engines (Bing, DuckDuckGo) check it between page fetches
+        # and image downloads. We don't import CancelToken here to
+        # avoid a circular import; the type is duck-typed.
+        self.cancel = cancel
 
         self.seen: set[str] = set()
         self.download_count = 0  # newly downloaded this run
@@ -142,6 +149,16 @@ class ImageEngine(ABC):
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             data: bytes = response.read()
             return data
+
+    def is_cancelled(self) -> bool:
+        """Return ``True`` if the user has called ``cancel_token.cancel()``.
+
+        Engines should call this between page fetches and individual
+        image downloads. The check is O(1) and lock-free.
+        """
+        if self.cancel is None:
+            return False
+        return bool(self.cancel.cancelled)
 
     # --- Download pipeline ---
 

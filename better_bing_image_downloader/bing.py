@@ -72,6 +72,7 @@ class Bing(ImageEngine):
         max_workers: int = 4,
         force_replace: bool = False,
         mkt: str = "en-US",
+        cancel=None,
     ):
         super().__init__(
             query=query,
@@ -83,6 +84,7 @@ class Bing(ImageEngine):
             name=name,
             max_workers=max_workers,
             force_replace=force_replace,
+            cancel=cancel,
         )
         self.adult = adult
         self.filter = filter
@@ -158,6 +160,13 @@ class Bing(ImageEngine):
         """Download images until ``self.limit`` is reached or pages are exhausted."""
         page_counter = 0
         while self._slots_used < self.limit:
+            # Check the cancel token (v3.3.0+). Returns immediately if
+            # the user called ``cancel_token.cancel()`` from another
+            # thread.
+            if self.is_cancelled():
+                if self.verbose:
+                    logging.info("[!] Cancellation requested; stopping.")
+                return
             if self.verbose:
                 logging.info("\n\n[!]Indexing page: %d\n", page_counter + 1)
             try:
