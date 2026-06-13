@@ -11,6 +11,7 @@ from .base import (
 from .bing import Bing
 from .download import downloader
 from .downloader import CancelToken, Downloader
+from .manifest import DEFAULT_MANIFEST_FIELDS, ManifestFieldError, ManifestWriter
 from .results import ImageResult, Result
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -18,12 +19,15 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 __all__ = [
     "Bing",
     "CancelToken",
+    "DEFAULT_MANIFEST_FIELDS",
     "Downloader",
     "DuplicateImageError",
     "ImageEngine",
     "ImageResult",
     "ImageSaveError",
     "InvalidImageError",
+    "ManifestFieldError",
+    "ManifestWriter",
     "NetworkError",
     "Result",
     "WriteError",

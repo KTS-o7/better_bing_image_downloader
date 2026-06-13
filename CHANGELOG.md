@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-06-13
+
+### Fixed
+
+- Re-export `ManifestWriter`, `DEFAULT_MANIFEST_FIELDS`, and
+  `ManifestFieldError` at the package top level so
+  `from better_bing_image_downloader import ManifestWriter`
+  works (these were only importable from the `manifest`
+  submodule in 3.5.0). No code changes.
+
 ## [3.5.0] - 2026-06-13
 
 ### Added

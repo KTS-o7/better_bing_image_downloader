@@ -82,7 +82,7 @@ optional but useful (`feat(duckduckgo): add region code`).
 - **Minor** (3.x.0): new features, backwards-compatible.
 - **Major** (x.0.0): breaking changes.
 
-The current version is **3.5.0**. Bump in `pyproject.toml` and
+The current version is **3.5.1**. Bump in `pyproject.toml` and
 `CHANGELOG.md` when cutting a release. Releases are cut by:
 1. Committing on `main`.
 2. Tagging (`git tag -a v3.X.Y -m "v3.X.Y: summary"`).
