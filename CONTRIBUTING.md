@@ -182,10 +182,12 @@ criteria:
 
 ### Good first issues (~30 minutes each)
 
-- [#26 — Add missing LICENSE file](https://github.com/KTS-o7/better_bing_image_downloader/issues/26)
-  (10 minutes, no code)
 - [#27 — Add a regression test for top-level package imports](https://github.com/KTS-o7/better_bing_image_downloader/issues/27)
   (30 minutes, pytest)
+- [#33 — Add a CLI smoke test for `bbid --version`](https://github.com/KTS-o7/better_bing_image_downloader/issues/33)
+  (15-20 minutes, pytest + stdlib)
+- [#34 — Add `manifest_path` to `Result.__repr__`](https://github.com/KTS-o7/better_bing_image_downloader/issues/34)
+  (10 minutes, 3-line code change)
 
 ### Help wanted (1-2 hours)
 
