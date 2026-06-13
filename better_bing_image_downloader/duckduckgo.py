@@ -185,9 +185,13 @@ class DuckDuckGo(ImageEngine):
             )
         return m.group(2)
 
-    def _fetch_page(self, vqd: str, offset: int) -> list[str]:
-        """Fetch a single page of image URLs from ``i.js``."""
-        url = (
+    def _build_page_url(self, vqd: str, offset: int) -> str:
+        """Construct the i.js URL for a given page offset (v3.5.0+).
+
+        Split out from :meth:`_fetch_page` so the manifest writer can
+        record the exact URL the engine requested.
+        """
+        return (
             "https://duckduckgo.com/i.js?q="
             + urllib.parse.quote_plus(self.query)
             + "&o=json&p=1&s="
@@ -198,6 +202,10 @@ class DuckDuckGo(ImageEngine):
             + "&vqd="
             + urllib.parse.quote_plus(vqd)
         )
+
+    def _fetch_page(self, vqd: str, offset: int) -> list[str]:
+        """Fetch a single page of image URLs from ``i.js``."""
+        url = self._build_page_url(vqd, offset)
         # i.js must be requested as XHR
         opener_with_xhr = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self._cookie_jar)
@@ -274,6 +282,10 @@ class DuckDuckGo(ImageEngine):
             if self.verbose:
                 logging.info("[!]Indexing page: %d (offset=%d)", page_num + 1, offset)
             try:
+                # Track the URL we are about to fetch so the manifest
+                # writer (v3.5.0+) can record provenance for every
+                # image sourced from this page.
+                self.last_page_url = self._build_page_url(vqd, offset)
                 links = self._fetch_page(vqd, offset)
             except (urllib.error.HTTPError, urllib.error.URLError) as e:
                 wait = self._consume_backoff()

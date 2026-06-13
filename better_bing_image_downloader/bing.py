@@ -122,13 +122,13 @@ class Bing(ImageEngine):
         }
         return filters.get(shorthand, "")
 
-    def _fetch_page(self, page_counter: int) -> str:
-        """Fetch and decode a single Bing image-search page.
+    def _build_page_url(self, page_counter: int) -> str:
+        """Construct the URL for a given results page (v3.5.0+).
 
-        Returns the page HTML as a string, or an empty string if no more
-        results are available.
+        Split out from :meth:`_fetch_page` so the manifest writer can
+        record the exact URL the engine requested.
         """
-        request_url = (
+        return (
             "https://www.bing.com/images/async?q="
             + urllib.parse.quote_plus(self.query)
             + "&first="
@@ -142,6 +142,14 @@ class Bing(ImageEngine):
             + "&qft="
             + ("" if self.filter is None else self.get_filter(self.filter))
         )
+
+    def _fetch_page(self, page_counter: int) -> str:
+        """Fetch and decode a single Bing image-search page.
+
+        Returns the page HTML as a string, or an empty string if no more
+        results are available.
+        """
+        request_url = self._build_page_url(page_counter)
         request = urllib.request.Request(request_url, None, headers=self.headers)
         with urllib.request.urlopen(request, timeout=self.timeout) as response:
             raw: bytes = response.read()
@@ -170,6 +178,10 @@ class Bing(ImageEngine):
             if self.verbose:
                 logging.info("\n\n[!]Indexing page: %d\n", page_counter + 1)
             try:
+                # Track the URL we are about to fetch so the manifest
+                # writer (v3.5.0+) can record provenance for every
+                # image sourced from this page.
+                self.last_page_url = self._build_page_url(page_counter)
                 html = self._fetch_page(page_counter)
             except (urllib.error.HTTPError, urllib.error.URLError) as e:
                 wait = self._consume_backoff()

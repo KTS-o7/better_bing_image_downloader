@@ -87,6 +87,13 @@ class Result:
         before reaching the requested limit. The ``images``,
         ``skipped``, and ``errors`` lists reflect whatever was
         completed up to the cancellation point.
+    manifest_path : str | None
+        Absolute path to the JSONL manifest file written during the
+        run, or ``None`` if ``manifest=False`` was passed to
+        :meth:`Downloader.search`. The manifest contains one JSON
+        record per attempted download (success or failure), with
+        status, URL, file path, MD5, error class, and provenance
+        metadata. Useful for ML dataset preparation pipelines.
     """
 
     __slots__ = (
@@ -98,6 +105,7 @@ class Result:
         "errors",
         "no_results_found",
         "cancelled",
+        "manifest_path",
         "_engine",
     )
     _engine: ImageEngine | None  # type annotation for mypy
@@ -112,6 +120,7 @@ class Result:
         errors: list[tuple[str, BaseException]] | None = None,
         no_results_found: bool = False,
         cancelled: bool = False,
+        manifest_path: str | None = None,
     ) -> None:
         self.query = query
         self.engine = engine
@@ -125,6 +134,10 @@ class Result:
         self.no_results_found = no_results_found
         # ``cancelled`` is True if a CancelToken aborted the run.
         self.cancelled = cancelled
+        # ``manifest_path`` is the absolute path to the JSONL
+        # manifest file written by ``Downloader.search(manifest=True)``,
+        # or ``None`` if no manifest was requested.
+        self.manifest_path = manifest_path
         # ``_engine`` is set by ``Downloader.search()`` to expose the
         # underlying engine instance for advanced users. Always present
         # in real ``Downloader``-produced Results; ``None`` when a

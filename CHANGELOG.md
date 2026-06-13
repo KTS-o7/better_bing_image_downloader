@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-06-13
+
+### Added
+
+- **JSONL manifest export** via `Downloader.search(manifest=True)`.
+  Writes one JSON record per download attempt (success or failure)
+  to `<output_dir>/<query>/manifest.jsonl` (or to a custom path).
+  Records contain: `index`, `status`, `url`, `file`, `md5`, `error`,
+  `engine`, `query`, `source_page`, `downloaded_at`. The writer is
+  crash-safe (line-buffered, flushed every record by default) and
+  filters records to a configurable `manifest_fields` list.
+- **New `ManifestWriter` class** in `better_bing_image_downloader.manifest`,
+  reusable independently of `Downloader` for users building custom
+  pipelines. Supports context-manager syntax.
+- **`Result.manifest_path`** attribute — absolute path to the manifest
+  file (or `None` if `manifest=False`).
+- **`ImageEngine.last_page_url`** attribute — set by `Bing` and
+  `DuckDuckGo` on each page fetch; captured as `source_page` in
+  manifest records. Custom engines that don't set it get `None`.
+- **4 new `Downloader.search` params**: `manifest`, `manifest_path`,
+  `manifest_fields`, `manifest_flush_every`. All default to off (zero
+  behavior change for existing users).
+- **4 new CLI flags**: `--manifest`, `--manifest-path`,
+  `--manifest-fields`, `--manifest-flush-every`.
+- **`_save_image_raising()` now returns the MD5** of the saved
+  image bytes (typed exceptions still raised on failure). This
+  lets the manifest writer record the hash without re-reading
+  the file. `save_image()` (the public catching wrapper) is
+  unchanged.
+
+### Tests
+
+- 26 new tests in `tests/test_v3_5_0_manifest.py` covering the
+  manifest writer (10), `Downloader` integration (10), result
+  attribute and CLI (4), and backwards compatibility (2).
+- Total: 149 tests passing, 2 network tests skipped by default.
+
 ## [3.4.0] - 2026-06-05
 
 ### Added

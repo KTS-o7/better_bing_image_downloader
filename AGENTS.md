@@ -13,7 +13,7 @@ repository. Read this before making non-trivial changes.
   `multidownloader` path.
 - **No CI is configured** (per the maintainer's request). Lint/type/test
   is run locally before pushing.
-- **Tests:** 123 passing, 2 network tests skipped by default
+- **Tests:** 149 passing, 2 network tests skipped by default
   (`BBID_RUN_NETWORK_TESTS=1` to enable).
 - **Linters:** `black` (formatter), `ruff` (lint), `mypy` (types).
   All three run via pre-commit.
@@ -25,6 +25,7 @@ repository. Read this before making non-trivial changes.
 | `base.py` | `ImageEngine` abstract base class — atomic write, dedup, resume, manifest, parallel downloads, future timeout. Defines `run()` as `@abstractmethod` | ✅ Yes |
 | `bing.py` | Bing image search engine (inherits from `base.ImageEngine`) | ✅ Yes |
 | `duckduckgo.py` | DuckDuckGo image search engine (inherits from `base.ImageEngine`) | ✅ Yes |
+| `manifest.py` | `ManifestWriter` JSONL writer (v3.5.0+). Reusable independently of `Downloader` | ✅ Yes |
 | `downloader.py` | `Downloader` class, engine registry, lifecycle hooks. **v3.2.0+ entry point** | ✅ Yes |
 | `results.py` | `Result` and `ImageResult` value objects returned by `Downloader.search()` | ✅ Yes |
 | `download.py` | Module-level `downloader()` function (legacy wrapper around `Downloader`) and `bbid` CLI | ✅ Yes |
@@ -81,7 +82,7 @@ optional but useful (`feat(duckduckgo): add region code`).
 - **Minor** (3.x.0): new features, backwards-compatible.
 - **Major** (x.0.0): breaking changes.
 
-The current version is **3.4.0**. Bump in `pyproject.toml` and
+The current version is **3.5.0**. Bump in `pyproject.toml` and
 `CHANGELOG.md` when cutting a release. Releases are cut by:
 1. Committing on `main`.
 2. Tagging (`git tag -a v3.X.Y -m "v3.X.Y: summary"`).

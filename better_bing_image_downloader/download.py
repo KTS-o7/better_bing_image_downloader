@@ -43,6 +43,10 @@ def downloader(
     engine: str = "bing",
     ddg_safe_search: str = "moderate",
     ddg_region: str = "us-en",
+    manifest: bool = False,
+    manifest_path: str | None = None,
+    manifest_fields: list[str] | None = None,
+    manifest_flush_every: int = 1,
     **kwargs,
 ) -> int:
     """Download images matching ``query`` using the chosen search engine.
@@ -158,6 +162,10 @@ def downloader(
             ddg_safe_search=ddg_safe_search,
             ddg_region=ddg_region,
             adult_filter_off=adult_filter_off,
+            manifest=manifest,
+            manifest_path=manifest_path,
+            manifest_fields=manifest_fields,
+            manifest_flush_every=manifest_flush_every,
         )
         # Preserve the v3.1.x contract: the legacy downloader()
         # function returns the engine's ``download_count``, which the
@@ -167,6 +175,11 @@ def downloader(
         # counts also fires the on_image hook), but the legacy API
         # exposes the engine's view for backwards compatibility.
         eng = result.engine_instance()
+        # Surface the manifest path (v3.5.0+) so users can find the
+        # JSONL file from a CLI run. Mirrors the v3.1.x _manifest.json
+        # behaviour but in the new format.
+        if getattr(result, "manifest_path", None):
+            logging.info("Wrote manifest to %s", result.manifest_path)
         if eng is not None:
             return eng.download_count
         return result.count
@@ -301,12 +314,43 @@ def main() -> None:
         default="us-en",
         help="DuckDuckGo region code (default: us-en).",
     )
+    parser.add_argument(
+        "--manifest",
+        action="store_true",
+        help="Write a JSONL manifest.jsonl with one record per download attempt.",
+    )
+    parser.add_argument(
+        "--manifest-path",
+        type=str,
+        default=None,
+        help="Override the manifest output path (default: <output_dir>/<query>/manifest.jsonl).",
+    )
+    parser.add_argument(
+        "--manifest-fields",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated list of manifest fields to include. "
+            "Valid: index,status,url,file,md5,error,engine,query,source_page,downloaded_at. "
+            "Default: all fields."
+        ),
+    )
+    parser.add_argument(
+        "--manifest-flush-every",
+        type=int,
+        default=1,
+        help="Flush the manifest file to disk every N records (default: 1, crash-safe).",
+    )
 
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s: %(message)s",
     )
+
+    manifest_fields_list = None
+    if args.manifest_fields:
+        manifest_fields_list = [f.strip() for f in args.manifest_fields.split(",") if f.strip()]
 
     downloader(
         args.query,
@@ -324,6 +368,10 @@ def main() -> None:
         engine=args.engine,
         ddg_safe_search=args.ddg_safe_search,
         ddg_region=args.ddg_region,
+        manifest=args.manifest,
+        manifest_path=args.manifest_path,
+        manifest_fields=manifest_fields_list,
+        manifest_flush_every=args.manifest_flush_every,
     )
 
 

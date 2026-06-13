@@ -294,6 +294,55 @@ dl.on_error = classify
 Catching the base `ImageSaveError` continues to work and matches
 all four subclasses (Liskov substitution).
 
+#### Manifest export (v3.5.0+)
+
+For ML training data preparation, write a JSONL manifest with one
+record per download attempt:
+
+```python
+from better_bing_image_downloader import Downloader
+
+dl = Downloader()
+result = dl.search(
+    "red panda", limit=100, engine="duckduckgo",
+    manifest=True,
+    # Optional: customise which fields appear in each record.
+    manifest_fields=["index", "status", "url", "file", "md5", "error", "source_page"],
+)
+print(f"Saved {result.count} images")
+print(f"Manifest: {result.manifest_path}")
+# <output_dir>/red panda/manifest.jsonl
+```
+
+Each line is a self-contained JSON object:
+
+```json
+{"index": 1, "status": "ok", "url": "https://example.com/red-panda.jpg", "file": "red panda_1.jpg", "md5": "5d41402abc4b2a76b9719d911017c592", "error": null, "source_page": "https://duckduckgo.com/?q=red+panda&iax=images&ia=images"}
+```
+
+Status values are `"ok"`, `"error"`, or `"skipped"`. The
+`source_page` field is the URL of the search-results page the
+image came from. Failed downloads record the typed exception
+class name in `error` (e.g. `"NetworkError"`).
+
+The manifest is line-buffered and flushed after every record by
+default, so a partial run leaves a valid (partial) file. Use
+`ManifestWriter` directly if you need custom pipelines:
+
+```python
+from pathlib import Path
+from better_bing_image_downloader import ManifestWriter
+
+with ManifestWriter(Path("my-manifest.jsonl")) as w:
+    w.append({"index": 1, "status": "ok", "url": "...", "file": "x.jpg", "md5": "...", "error": None, "engine": "bing", "query": "cat", "source_page": "...", "downloaded_at": "2026-06-13T15:30:42Z"})
+```
+
+CLI equivalent:
+
+```bash
+bbid --manifest --manifest-fields index,status,url,md5 "red panda"
+```
+
 ### Resume behaviour
 
 By default (`force_replace=False`), re-running the same query skips already-downloaded files and downloads only what's missing:
@@ -483,6 +532,16 @@ main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
 
 ## Changelog
+
+### 3.5.0 (JSONL manifest export)
+
+- **New:** `Downloader.search(manifest=True)` writes a JSONL `manifest.jsonl` with one record per download attempt. Use it for ML training data prep.
+- **New:** 10 default fields (index, status, url, file, md5, error, engine, query, source_page, downloaded_at). Override with `manifest_fields=[...]`.
+- **New:** `Result.manifest_path` exposes the absolute manifest path.
+- **New:** `ManifestWriter` class is reusable independently of `Downloader` for custom pipelines.
+- **New:** `ImageEngine.last_page_url` is captured as `source_page` in each record (provenance for ML dataset prep).
+- **New:** 4 new CLI flags: `--manifest`, `--manifest-path`, `--manifest-fields`, `--manifest-flush-every`.
+- **Tests:** 123 → 149 (added 26 feature tests in `tests/test_v3_5_0_manifest.py`).
 
 ### 3.4.0 (typed errors + progress + async)
 

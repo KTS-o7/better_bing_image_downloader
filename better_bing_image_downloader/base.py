@@ -190,6 +190,12 @@ class ImageEngine(ABC):
         self.manifest: dict = {}  # filename -> source URL
         self._file_hashes: set = set()
         self._hash_lock = threading.Lock()
+        # ``last_page_url`` (v3.5.0+) is the URL of the most recently
+        # fetched search-results page. Set by each engine's ``run()``
+        # method after a page fetch; read by the manifest writer to
+        # capture per-image provenance. ``None`` until the first page
+        # fetch; remains ``None`` for engines that don't track it.
+        self.last_page_url: str | None = None
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -259,8 +265,15 @@ class ImageEngine(ABC):
             logging.info("Image save skipped: %s", e)
             return False
 
-    def _save_image_raising(self, link: str, file_path) -> None:
+    def _save_image_raising(self, link: str, file_path) -> str:
         """Download an image to ``file_path`` atomically, raising on failure.
+
+        Returns
+        -------
+        str
+            The MD5 hex digest of the saved image bytes. Returned on
+            success so the manifest writer (v3.5.0+) can record it
+            without re-reading the file.
 
         Raises
         ------
@@ -312,6 +325,7 @@ class ImageEngine(ABC):
             except OSError:
                 pass
             raise WriteError(url=link, message=f"write: {e}") from e
+        return file_hash
 
     def download_image(self, link: str, index: int):
         """Download and save a single image.

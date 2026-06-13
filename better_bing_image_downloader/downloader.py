@@ -13,6 +13,9 @@ It owns:
   log to its own system, or abort a run
 - a :meth:`Downloader.search` method that returns a :class:`Result`
   object with the full list of saved images, errors, and metadata
+- a JSONL manifest writer (v3.5.0+) — when ``manifest=True`` is passed
+  to ``search()``, every attempt (success or failure) is appended to a
+  ``manifest.jsonl`` file as the run progresses
 
 The legacy module-level :func:`better_bing_image_downloader.downloader`
 function is preserved as a thin wrapper around :class:`Downloader`.
@@ -22,15 +25,18 @@ from __future__ import annotations
 
 import http.cookiejar
 import logging
+import os
 import threading
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 from .base import ImageEngine
 from .bing import Bing
 from .duckduckgo import DuckDuckGo
+from .manifest import DEFAULT_MANIFEST_FIELDS, ManifestWriter
 from .results import ImageResult, Result
 
 __all__ = [
@@ -43,6 +49,8 @@ __all__ = [
     "DuplicateImageError",
     "WriteError",
     "CancelToken",
+    "ManifestWriter",
+    "DEFAULT_MANIFEST_FIELDS",
 ]
 
 
@@ -195,6 +203,14 @@ class Downloader:
         self._registry: dict[str, type[ImageEngine]] = dict(self._DEFAULT_REGISTRY)
         self._registry_lock = threading.Lock()
 
+        # --- Manifest writer (v3.5.0+). Set by ``search()``; ``None``
+        # means no manifest is being written. The success/error hooks
+        # inside ``search()`` read this attribute to decide whether to
+        # append records.
+        self._manifest_writer: ManifestWriter | None = None
+        self._manifest_engine_name: str | None = None
+        self._manifest_query: str | None = None
+
     # --- Engine registry ---
 
     def engines(self) -> list[str]:
@@ -276,6 +292,10 @@ class Downloader:
         ddg_region: str = "us-en",
         adult_filter_off: bool = False,
         cancel: CancelToken | None = None,
+        manifest: bool = False,
+        manifest_path: str | os.PathLike | None = None,
+        manifest_fields: list[str] | None = None,
+        manifest_flush_every: int = 1,
     ) -> Result:
         """Run a search and return a :class:`Result`.
 
@@ -292,11 +312,59 @@ class Downloader:
             (Bing, DuckDuckGo) check the token between page fetches
             and stop cleanly. The partial :class:`Result` is
             returned with ``result.cancelled = True``.
+        manifest : bool
+            If ``True``, write a JSONL ``manifest.jsonl`` file in
+            ``output_dir`` (or at ``manifest_path``) with one record
+            per attempted download (success or failure). The
+            returned :class:`Result` exposes the absolute manifest
+            path via ``result.manifest_path``; if ``manifest`` is
+            ``False`` (the default), the field is ``None`` and no
+            file is created. Default: ``False``.
+        manifest_path : str | os.PathLike | None
+            Override the manifest file path. If ``None`` (the
+            default) and ``manifest=True``, the file is written to
+            ``<output_dir>/<query>/manifest.jsonl``. Parent
+            directories are created as needed.
+        manifest_fields : list[str] | None
+            Subset of manifest field names to include in each
+            record. If ``None`` (the default), the full set of
+            10 core+provenance fields is written. Unknown field
+            names raise :class:`ManifestFieldError` at the start of
+            the run.
+        manifest_flush_every : int
+            Flush the manifest file to disk every N records. The
+            default ``1`` is crash-safe; higher values trade crash
+            safety for throughput on slow disks. ``close()`` always
+            flushes regardless of this value. Default: ``1``.
         """
         image_dir = Path(output_dir) / query
         image_dir.mkdir(parents=True, exist_ok=True)
 
         adult = "off" if adult_filter_off else "moderate"
+
+        # --- Manifest writer (v3.5.0+) ---
+        # Constructed here so it is open and ready to receive
+        # records from the very first image attempt. Wrapped in
+        # try/finally below to guarantee ``close()`` is called
+        # even on exception. ``self._manifest_writer`` is also
+        # set on the instance so the success/error hooks inside
+        # ``_run_engine`` can append records to it.
+        manifest_writer: ManifestWriter | None = None
+        manifest_abs_path: str | None = None
+        if manifest:
+            resolved_manifest_path = (
+                Path(manifest_path) if manifest_path else image_dir / "manifest.jsonl"
+            )
+            manifest_writer = ManifestWriter(
+                resolved_manifest_path,
+                fields=manifest_fields,
+                flush_every=manifest_flush_every,
+            )
+            manifest_abs_path = str(resolved_manifest_path.resolve())
+        # Expose to the success/error hooks below.
+        self._manifest_writer = manifest_writer
+        self._manifest_engine_name = engine
+        self._manifest_query = query
 
         engine_kwargs: dict[str, object] = {}
         if engine == "bing":
@@ -382,7 +450,11 @@ class Downloader:
             nonlocal save_attempts
             save_attempts += 1
             try:
-                original_save_raising(link, file_path)
+                # ``_save_image_raising`` returns the MD5 hex digest
+                # of the saved bytes (v3.5.0+). The legacy
+                # ``save_image`` wrapper does not return it; we
+                # rely on the raising variant here.
+                file_md5 = original_save_raising(link, file_path)
             except ImageSaveError as exc:
                 # Typed save failure (v3.4.0+). Surface via on_error
                 # and Result.errors.
@@ -392,6 +464,16 @@ class Downloader:
                         self.on_error(link, exc)
                     except Exception:
                         logging.exception("on_error hook raised; continuing")
+                # Manifest append (v3.5.0+): record the typed failure.
+                if self._manifest_writer is not None:
+                    self._append_manifest_record(
+                        status="error",
+                        url=link,
+                        file_path=None,
+                        md5=None,
+                        error=exc,
+                        engine_obj=engine_obj,
+                    )
                 return False
             except Exception as exc:
                 # Unhandled exception in save_image (e.g. a bug in
@@ -402,6 +484,16 @@ class Downloader:
                         self.on_error(link, exc)
                     except Exception:
                         logging.exception("on_error hook raised; continuing")
+                # Manifest append (v3.5.0+): record the unhandled failure.
+                if self._manifest_writer is not None:
+                    self._append_manifest_record(
+                        status="error",
+                        url=link,
+                        file_path=None,
+                        md5=None,
+                        error=exc,
+                        engine_obj=engine_obj,
+                    )
                 return False
             fp = Path(file_path)
             if fp in seen_paths:
@@ -442,6 +534,16 @@ class Downloader:
                     self.on_progress(pct, done, total, eta)
                 except Exception:
                     logging.exception("on_progress hook raised; continuing")
+            # Manifest append (v3.5.0+): one record per successful save.
+            if self._manifest_writer is not None:
+                self._append_manifest_record(
+                    status="ok",
+                    url=link,
+                    file_path=fp,
+                    md5=file_md5,
+                    error=None,
+                    engine_obj=engine_obj,
+                )
             return True
 
         # ``save_image`` is defined on the base ``ImageEngine`` class,
@@ -461,8 +563,11 @@ class Downloader:
         try:
             engine_obj.run()
         finally:
-            # Always surface what we have, even on exception.
-            pass
+            # Always close the manifest writer, even on exception.
+            # The writer is idempotent, so a second close (e.g. if
+            # the search raises after a successful run) is a no-op.
+            if manifest_writer is not None:
+                manifest_writer.close()
 
         # Compute the run's high-level outcome flags.
         # ``no_results_found`` is True when the engine considered
@@ -488,6 +593,7 @@ class Downloader:
             errors=errors,
             no_results_found=no_results_found,
             cancelled=cancelled,
+            manifest_path=manifest_abs_path,
         )
         # Attach the engine instance to the Result so the legacy
         # ``downloader()`` function can read ``engine.download_count``
@@ -501,6 +607,61 @@ class Downloader:
                 logging.exception("on_engine_done hook raised; continuing")
 
         return result
+
+    def _append_manifest_record(
+        self,
+        status: str,
+        url: str,
+        file_path: Path | None,
+        md5: str | None,
+        error: BaseException | None,
+        engine_obj: ImageEngine,
+    ) -> None:
+        """Build a manifest record dict and append it to the writer.
+
+        Called from the success and error paths inside :meth:`search`
+        when ``manifest=True`` was passed. The record is filtered to
+        the writer's configured fields automatically.
+
+        ``file_path`` is stored relative to ``output_dir`` (i.e. as
+        ``"<query>/Image_1.jpg"``) so the manifest is portable
+        across machines. If the relative-to conversion fails (e.g.
+        the engine wrote outside ``output_dir``), the basename is
+        used as a fallback.
+        """
+        if self._manifest_writer is None:
+            return
+        # ``index`` is 1-based and counts every record (success or
+        # failure). The engine's ``download_count`` is incremented
+        # inside ``download_image`` *after* ``save_image`` returns,
+        # so at the point we append to the manifest, the success
+        # path's count reflects this image and the failure path's
+        # count does not (the engine did not advance). We add 1 in
+        # the success path to make the index 1-based; the failure
+        # path's count is already the right 0-based position, but
+        # we also add 1 for consistency.
+        index = engine_obj.download_count + 1
+        # Resolve file path relative to output_dir.
+        file_rel: str | None = None
+        if file_path is not None:
+            try:
+                file_rel = str(file_path.resolve().relative_to(Path.cwd()))
+            except ValueError:
+                file_rel = file_path.name
+        self._manifest_writer.append(
+            {
+                "index": index,
+                "status": status,
+                "url": url,
+                "file": file_rel,
+                "md5": md5,
+                "error": type(error).__name__ if error is not None else None,
+                "engine": self._manifest_engine_name,
+                "query": self._manifest_query,
+                "source_page": getattr(engine_obj, "last_page_url", None),
+                "downloaded_at": _utcnow_iso(),
+            }
+        )
 
     async def search_async(
         self,
@@ -520,6 +681,10 @@ class Downloader:
         ddg_region: str = "us-en",
         adult_filter_off: bool = False,
         cancel: CancelToken | None = None,
+        manifest: bool = False,
+        manifest_path: str | os.PathLike | None = None,
+        manifest_fields: list[str] | None = None,
+        manifest_flush_every: int = 1,
     ) -> Result:
         """Async wrapper around :meth:`search`.
 
@@ -569,7 +734,20 @@ class Downloader:
             ddg_region=ddg_region,
             adult_filter_off=adult_filter_off,
             cancel=cancel,
+            manifest=manifest,
+            manifest_path=manifest_path,
+            manifest_fields=manifest_fields,
+            manifest_flush_every=manifest_flush_every,
         )
+
+
+def _utcnow_iso() -> str:
+    """Return the current UTC time as an ISO 8601 string with a trailing 'Z'.
+
+    Used by the manifest writer to stamp each record's
+    ``downloaded_at`` field. Format: ``YYYY-MM-DDTHH:MM:SSZ``.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _compute_eta(state: dict[str, float | int], done: int, total: int) -> float | None:
