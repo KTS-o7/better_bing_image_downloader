@@ -174,6 +174,37 @@ Maintainers cut releases as follows:
    automatically. Verify on
    <https://pypi.org/project/better-bing-image-downloader/>.
 
+## Looking for something to work on?
+
+We curate a small set of issues for new contributors. They're
+scoped to be shippable in a single PR, with clear acceptance
+criteria:
+
+### Good first issues (~30 minutes each)
+
+- [#26 — Add missing LICENSE file](https://github.com/KTS-o7/better_bing_image_downloader/issues/26)
+  (10 minutes, no code)
+- [#27 — Add a regression test for top-level package imports](https://github.com/KTS-o7/better_bing_image_downloader/issues/27)
+  (30 minutes, pytest)
+
+### Help wanted (1-2 hours)
+
+- [#28 — Add a GitHub Actions test workflow](https://github.com/KTS-o7/better_bing_image_downloader/issues/28)
+  (CI YAML on Python 3.8 / 3.10 / 3.12)
+- [#29 — Document and enforce Downloader thread-safety contract](https://github.com/KTS-o7/better_bing_image_downloader/issues/29)
+  (docstring + optional test)
+- [#30 — Deprecate the v3.1.x `_manifest.json` legacy file](https://github.com/KTS-o7/better_bing_image_downloader/issues/30)
+  (small design decision + code)
+
+### Features (4-6 hours)
+
+- [#31 — `min_dimension` filter for v3.6.0](https://github.com/KTS-o7/better_bing_image_downloader/issues/31)
+  (new typed exception, new `search()` param, manifest integration)
+
+If none of these match what you want to work on, look for issues
+with the `help wanted` or `good first issue` labels, or open a
+discussion first to scope a new idea.
+
 ## Questions?
 
 Open a GitHub issue or email
