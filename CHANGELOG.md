@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`min_dimension` filter** for `Downloader.search()` / `search_async()`.
+  Images smaller than `min_dimension` pixels on either side are
+  skipped before being saved — useful for ML training-data
+  preparation, where thumbnails are noise. Dimensions are read
+  directly from PNG, JPEG, GIF, BMP, and WEBP headers (no new
+  dependency); formats we can't parse (e.g. TIFF) are never
+  filtered.
+- New `BelowMinDimension` exception (subclass of `ImageSaveError`,
+  so `except ImageSaveError` still catches it).
+- Skips from the new filter are recorded in the manifest as
+  `status="skipped"`, `error="BelowMinDimension"`, and counted in
+  `Result.skipped` — not `Result.errors` / `on_error`, since a
+  too-small image is an intentional filter outcome, not a failure.
+- 13 new tests in `tests/test_v3_6_0_features.py`.
+
 ## [3.5.1] - 2026-06-13
 
 ### Fixed

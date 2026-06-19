@@ -1,6 +1,7 @@
 import logging
 
 from .base import (
+    BelowMinDimension,
     DuplicateImageError,
     ImageEngine,
     ImageSaveError,
@@ -17,6 +18,7 @@ from .results import ImageResult, Result
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
+    "BelowMinDimension",
     "Bing",
     "CancelToken",
     "DEFAULT_MANIFEST_FIELDS",

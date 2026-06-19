@@ -70,8 +70,10 @@ class Result:
         Every image that was newly saved by this run (does not include
         files that were already on disk from a previous run).
     skipped : int
-        Number of files that were skipped because they already existed
-        (``force_replace=False`` and a file with that index was present).
+        Number of files that were skipped: either because they already
+        existed (``force_replace=False`` and a file with that index
+        was present) or, as of v3.6.0, because they were smaller than
+        ``min_dimension`` on either side.
     errors : list[tuple[str, BaseException]]
         ``(url, exception)`` pairs for each download that failed.
     no_results_found : bool
