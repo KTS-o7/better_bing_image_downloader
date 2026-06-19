@@ -724,3 +724,55 @@ def test_legacy_downloader_function_supports_manifest(tmp_path: Path) -> None:
     assert captured["manifest_fields"] == ["url", "md5"]
     # Legacy downloader() returns int.
     assert isinstance(result_count, int)
+
+
+# --- Group: Result.__repr__ includes manifest_path (issue #34) ---
+
+
+def test_result_repr_includes_manifest_path_when_set(tmp_path: Path) -> None:
+    """Result.__repr__ includes manifest_path when a manifest was written."""
+    from better_bing_image_downloader import Result
+
+    r = Result(
+        query="cats",
+        engine="bing",
+        output_dir=tmp_path,
+        manifest_path=str(tmp_path / "manifest.jsonl"),
+    )
+    text = repr(r)
+    assert "manifest.jsonl" in text
+    assert "manifest_path" in text
+    assert str(tmp_path / "manifest.jsonl") in text
+
+
+def test_result_repr_includes_no_manifest_sentinel_when_none(tmp_path: Path) -> None:
+    """Result.__repr__ shows 'no manifest' when manifest_path is None."""
+    from better_bing_image_downloader import Result
+
+    r = Result(
+        query="cats",
+        engine="bing",
+        output_dir=tmp_path,
+    )
+    text = repr(r)
+    assert "no manifest" in text
+    assert "manifest_path" in text
+
+
+def test_result_repr_preserves_existing_flags_ordering(tmp_path: Path) -> None:
+    """Adding manifest_path must not disturb the existing repr format."""
+    from better_bing_image_downloader import Result
+
+    r = Result(
+        query="cats",
+        engine="bing",
+        output_dir=tmp_path,
+        no_results_found=True,
+        cancelled=True,
+        manifest_path=str(tmp_path / "m.jsonl"),
+    )
+    text = repr(r)
+    # The existing flags= list and trailing manifest_path should both
+    # still be present, in the documented order.
+    assert "flags=['no_results_found', 'cancelled']" in text
+    assert text.endswith("manifest_path='" + str(tmp_path / "m.jsonl") + "')")

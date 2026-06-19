@@ -175,8 +175,10 @@ class Result:
         if self.cancelled:
             flags.append("cancelled")
         flag_str = f", flags={flags}" if flags else ""
+        manifest_repr = self.manifest_path if self.manifest_path is not None else "no manifest"
         return (
             f"Result(query={self.query!r}, engine={self.engine!r}, "
             f"count={self.count}, skipped={self.skipped}, "
-            f"errors={len(self.errors)}{flag_str})"
+            f"errors={len(self.errors)}{flag_str}, "
+            f"manifest_path={manifest_repr!r})"
         )
