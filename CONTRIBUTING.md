@@ -126,6 +126,22 @@ line stays under 72 characters; the body, if any, is wrapped at 72.
    gh pr create --fill
    ```
 
+5.1. **Sign your commits.** This repository's `main` branch requires
+   GPG- or SSH-signed commits (`required_signatures: true`). Before
+   you push:
+
+   - Configure git signing:
+     ```bash
+     git config commit.gpgsign true
+     git config user.signingkey <KEY_ID>
+     ```
+
+   - Upload your public signing key in
+     GitHub account settings: <https://github.com/settings/keys>
+
+   Commits that GitHub marks as `unknown_key` are treated as unsigned by
+   branch protection and will block merge.
+
 6. The maintainer will review and may request changes. Squash-merge is
    the default.
 
