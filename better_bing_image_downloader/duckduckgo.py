@@ -36,7 +36,7 @@ except ImportError:  # pragma: no cover
     brotli = None
     _HAS_BROTLI = False
 
-from .base import MAX_FUTURE_TIMEOUT, ImageEngine
+from .base import DEFAULT_VERBOSE, MAX_FUTURE_TIMEOUT, ImageEngine
 
 __all__ = ["DuckDuckGo"]
 
@@ -95,7 +95,7 @@ class DuckDuckGo(ImageEngine):
         limit: int,
         output_dir,
         timeout: int = 30,
-        verbose: bool = True,
+        verbose: bool = DEFAULT_VERBOSE,
         badsites=None,
         name: str = "Image",
         max_workers: int = 4,

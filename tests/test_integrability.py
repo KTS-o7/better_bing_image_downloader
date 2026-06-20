@@ -22,7 +22,7 @@ def test_bing_instantiable_with_only_required_args(tmp_path: Path) -> None:
     assert b.limit == 5
     assert b.adult == "moderate"
     assert b.timeout == 60
-    assert b.verbose is True
+    assert b.verbose is False
     assert b.filter == ""
     assert b.mkt == "en-US"
 
@@ -33,6 +33,7 @@ def test_duckduckgo_instantiable_with_only_required_args(tmp_path: Path) -> None
     assert d.query == "red panda"
     assert d.limit == 5
     assert d.timeout == 30
+    assert d.verbose is False
     assert d.safe_search == "moderate"
     assert d.region == "us-en"
 
