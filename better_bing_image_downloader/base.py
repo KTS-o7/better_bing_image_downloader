@@ -174,6 +174,13 @@ def _read_jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
             pos += 1
             continue
         marker = data[pos + 1]
+        if marker == 0xDA:
+            # Start of Scan: entropy-coded data follows, with no more
+            # markers to find. SOFn always precedes SOS in a
+            # well-formed JPEG, so reaching this means dimensions
+            # weren't found; stop before scanning byte-stuffed scan
+            # data that could false-match a marker.
+            return None
         # Standalone markers (no length field, no payload).
         if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
             pos += 2
@@ -261,7 +268,9 @@ def _read_image_dimensions(data: bytes) -> tuple[int, int] | None:
 
         if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
             return _read_webp_dimensions(data)
-    except Exception:  # noqa: BLE001 - dimension sniffing must never crash a download
+    except (IndexError, ValueError):
+        # Truncated/malformed header. Dimension sniffing must never
+        # crash a download, so treat this the same as "unmeasurable".
         return None
     return None
 

@@ -396,6 +396,16 @@ class Downloader:
         # (Bing, DuckDuckGo) can abort between page fetches.
         if cancel is not None:
             engine_kwargs["cancel"] = cancel
+        # ``min_dimension`` (v3.6.0+) flows through ``engine_kwargs``
+        # like every other option, the same way ``cancel`` does.
+        # Bing and DuckDuckGo accept it in their own constructors and
+        # forward it via ``super().__init__()``; custom engines that
+        # don't override ``__init__`` inherit support for it directly
+        # from ``ImageEngine``. As with ``cancel``, we only add the
+        # key when it's actually used so engines that don't accept it
+        # (and don't use the feature) are unaffected.
+        if min_dimension is not None:
+            engine_kwargs["min_dimension"] = min_dimension
 
         engine_obj = self.build_engine(
             engine_name=engine,
@@ -410,13 +420,6 @@ class Downloader:
             force_replace=force_replace,
             **engine_kwargs,
         )
-        # ``min_dimension`` (v3.6.0+) isn't part of Bing's or
-        # DuckDuckGo's own constructor signature, so it can't go
-        # through ``engine_kwargs`` above without breaking those
-        # classes. Set it directly on the instance instead — the same
-        # pattern used below for the save_image/download_image
-        # monkey-patches.
-        engine_obj.min_dimension = min_dimension
 
         # Wire hooks: the engine records every successful save into
         # ``manifest`` and increments ``download_count`` / ``_slots_used``.

@@ -47,6 +47,7 @@ def downloader(
     manifest_path: str | None = None,
     manifest_fields: list[str] | None = None,
     manifest_flush_every: int = 1,
+    min_dimension: int | None = None,
     **kwargs,
 ) -> int:
     """Download images matching ``query`` using the chosen search engine.
@@ -91,6 +92,10 @@ def downloader(
         or ``"off"``. Default ``"moderate"``.
     ddg_region : str
         DuckDuckGo region code (e.g. ``"us-en"``). Default ``"us-en"``.
+    min_dimension : int | None
+        Minimum width/height in pixels (v3.6.0+). Images smaller than
+        this on either side are skipped. ``None`` (the default)
+        disables the filter.
 
     Returns
     -------
@@ -166,6 +171,7 @@ def downloader(
             manifest_path=manifest_path,
             manifest_fields=manifest_fields,
             manifest_flush_every=manifest_flush_every,
+            min_dimension=min_dimension,
         )
         # Preserve the v3.1.x contract: the legacy downloader()
         # function returns the engine's ``download_count``, which the
@@ -341,6 +347,12 @@ def main() -> None:
         default=1,
         help="Flush the manifest file to disk every N records (default: 1, crash-safe).",
     )
+    parser.add_argument(
+        "--min-dimension",
+        type=int,
+        default=None,
+        help="Minimum width/height in pixels; smaller images are skipped (default: no filtering).",
+    )
 
     args = parser.parse_args()
     logging.basicConfig(
@@ -372,6 +384,7 @@ def main() -> None:
         manifest_path=args.manifest_path,
         manifest_fields=manifest_fields_list,
         manifest_flush_every=args.manifest_flush_every,
+        min_dimension=args.min_dimension,
     )
 
 
