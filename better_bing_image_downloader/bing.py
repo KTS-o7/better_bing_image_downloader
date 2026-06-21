@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .base import MAX_FUTURE_TIMEOUT, ImageEngine
+from .base import DEFAULT_VERBOSE, MAX_FUTURE_TIMEOUT, ImageEngine
 
 __all__ = ["Bing"]
 
@@ -66,7 +66,7 @@ class Bing(ImageEngine):
         adult: str = "moderate",
         timeout: int = 60,
         filter: str = "",
-        verbose: bool = True,
+        verbose: bool = DEFAULT_VERBOSE,
         badsites=None,
         name: str = "Image",
         max_workers: int = 4,

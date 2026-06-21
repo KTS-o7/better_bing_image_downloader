@@ -22,6 +22,7 @@ from pathlib import Path
 import filetype
 
 __all__ = [
+    "DEFAULT_VERBOSE",
     "ImageEngine",
     "ImageSaveError",
     "NetworkError",
@@ -161,6 +162,8 @@ DEFAULT_HEADERS = {
     "Accept-Encoding": "gzip, deflate",
 }
 
+DEFAULT_VERBOSE = False
+
 
 def _read_jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
     """Walk JPEG markers looking for a Start-Of-Frame (SOFn) segment."""
@@ -278,7 +281,7 @@ class ImageEngine(ABC):
         limit: int,
         output_dir,
         timeout: int = 60,
-        verbose: bool = True,
+        verbose: bool = DEFAULT_VERBOSE,
         badsites=None,
         name: str = "Image",
         max_workers: int = 4,
