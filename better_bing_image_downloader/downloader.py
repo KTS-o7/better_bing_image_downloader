@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from .base import ImageEngine
+from .base import DEFAULT_VERBOSE, ImageEngine
 from .bing import Bing
 from .duckduckgo import DuckDuckGo
 from .manifest import DEFAULT_MANIFEST_FIELDS, ManifestWriter
@@ -285,7 +285,7 @@ class Downloader:
         max_workers: int = 4,
         force_replace: bool = False,
         timeout: int = 60,
-        verbose: bool = False,
+        verbose: bool = DEFAULT_VERBOSE,
         image_filter: str = "",
         mkt: str = "en-US",
         ddg_safe_search: str = "moderate",
@@ -674,7 +674,7 @@ class Downloader:
         max_workers: int = 4,
         force_replace: bool = False,
         timeout: int = 60,
-        verbose: bool = False,
+        verbose: bool = DEFAULT_VERBOSE,
         image_filter: str = "",
         mkt: str = "en-US",
         ddg_safe_search: str = "moderate",

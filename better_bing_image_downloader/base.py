@@ -22,6 +22,7 @@ from pathlib import Path
 import filetype
 
 __all__ = [
+    "DEFAULT_VERBOSE",
     "ImageEngine",
     "ImageSaveError",
     "NetworkError",
@@ -134,6 +135,8 @@ DEFAULT_HEADERS = {
     "Accept-Encoding": "gzip, deflate",
 }
 
+DEFAULT_VERBOSE = False
+
 
 class ImageEngine(ABC):
     """Base class for image search engine scrapers.
@@ -150,7 +153,7 @@ class ImageEngine(ABC):
         limit: int,
         output_dir,
         timeout: int = 60,
-        verbose: bool = True,
+        verbose: bool = DEFAULT_VERBOSE,
         badsites=None,
         name: str = "Image",
         max_workers: int = 4,

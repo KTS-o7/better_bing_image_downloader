@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import inspect
 import tempfile
 from pathlib import Path
 
@@ -108,6 +109,24 @@ def test_downloader_zero_arg_construction() -> None:
 def test_downloader_with_session_dir() -> None:
     dl = Downloader(cache_dir=Path(tempfile.gettempdir()) / "bbid_test_cache")
     assert dl.cache_dir is not None
+
+
+def test_embeddable_verbose_defaults_match(tmp_path: Path) -> None:
+    """Direct engine use and Downloader.search should agree on quiet defaults."""
+    assert inspect.signature(Downloader.search).parameters["verbose"].default is False
+    assert inspect.signature(ImageEngine.__init__).parameters["verbose"].default is False
+    assert inspect.signature(Bing.__init__).parameters["verbose"].default is False
+    assert inspect.signature(DuckDuckGo.__init__).parameters["verbose"].default is False
+
+    class FakeEngine(ImageEngine):
+        def run(self) -> None:
+            pass
+
+    dl = Downloader()
+    dl.register("fake", FakeEngine)
+    inst = dl.build_engine(engine_name="fake", query="x", limit=1, output_dir=tmp_path)
+
+    assert inst.verbose is False
 
 
 # --- Engine registry ---
@@ -243,8 +262,6 @@ def test_downloader_search_collects_images_via_hook(tmp_path: Path) -> None:
 
 def test_legacy_downloader_function_still_works(tmp_path: Path) -> None:
     """The module-level downloader() function is preserved (delegates to Downloader)."""
-    import inspect
-
     sig = inspect.signature(downloader)
     # query is the only required parameter
     required = [
