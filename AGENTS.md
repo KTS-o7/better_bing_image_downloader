@@ -171,7 +171,7 @@ The current version is **3.5.1**. Bump in `pyproject.toml` and
 4. Tag: `git tag -a v3.X.Y -m "v3.X.Y: <one-line summary>"`.
 5. Push: `git push origin main --follow-tags`.
 6. Create a GitHub release with notes from `CHANGELOG.md` (use
-   `gh release create v3.X.Y --notes-file <(sed -n '/^## \[3.X.Y\]/,/^## /p' CHANGELOG.md | head -n -2)`).
+   `gh release create v3.X.Y --notes-file <(awk '/^## \[3.X.Y\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md)`).
 7. The `python-publish.yml` workflow will publish to PyPI.
 8. Verify on https://pypi.org/project/better-bing-image-downloader/.
 

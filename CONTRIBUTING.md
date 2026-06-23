@@ -185,7 +185,7 @@ Maintainers cut releases as follows:
 5. Push the branch and the tag:
    `git push origin main --follow-tags`.
 6. Create a GitHub release with notes from `CHANGELOG.md`. Use
-   `gh release create v3.X.Y --notes-file <(awk '/^## \[3.X.Y\]/{flag=1} /^## \[3.X.Y-1\]/{flag=0} flag' CHANGELOG.md)`.
+   `gh release create v3.X.Y --notes-file <(awk '/^## \[3.X.Y\]/{flag=1; next} /^## \[/{flag=0} flag' CHANGELOG.md)`.
 7. The `python-publish.yml` workflow will build and upload to PyPI
    automatically. Verify on
    <https://pypi.org/project/better-bing-image-downloader/>.
