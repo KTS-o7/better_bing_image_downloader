@@ -73,6 +73,7 @@ class Bing(ImageEngine):
         force_replace: bool = False,
         mkt: str = "en-US",
         cancel=None,
+        min_dimension: int | None = None,
     ):
         super().__init__(
             query=query,
@@ -85,6 +86,7 @@ class Bing(ImageEngine):
             max_workers=max_workers,
             force_replace=force_replace,
             cancel=cancel,
+            min_dimension=min_dimension,
         )
         self.adult = adult
         self.filter = filter

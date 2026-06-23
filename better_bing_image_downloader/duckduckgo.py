@@ -103,6 +103,7 @@ class DuckDuckGo(ImageEngine):
         safe_search: str = "moderate",
         region: str = "us-en",
         cancel=None,
+        min_dimension: int | None = None,
     ):
         super().__init__(
             query=query,
@@ -115,6 +116,7 @@ class DuckDuckGo(ImageEngine):
             max_workers=max_workers,
             force_replace=force_replace,
             cancel=cancel,
+            min_dimension=min_dimension,
         )
         if safe_search not in self.VALID_SAFE_SEARCH:
             raise ValueError(

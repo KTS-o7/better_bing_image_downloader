@@ -29,6 +29,7 @@ __all__ = [
     "InvalidImageError",
     "DuplicateImageError",
     "WriteError",
+    "BelowMinDimension",
     "MAX_FUTURE_TIMEOUT",
     "VALID_IMAGE_EXTENSIONS",
 ]
@@ -105,6 +106,32 @@ class WriteError(ImageSaveError):
         super().__init__(reason="write_failed", url=url, message=message)
 
 
+class BelowMinDimension(ImageSaveError):
+    """The fetched image's width or height is below ``min_dimension`` (v3.6.0+).
+
+    Raised by ``_save_image_raising`` when ``self.min_dimension`` is set
+    and the downloaded image is smaller than that threshold on either
+    side. ``Downloader.search`` treats this differently from the other
+    ``ImageSaveError`` subclasses: it's recorded in the manifest as a
+    ``"skipped"`` record (not an ``"error"``) and counted in
+    ``Result.skipped`` rather than ``Result.errors``, since a too-small
+    image is an intentional filter outcome, not a failure.
+    """
+
+    def __init__(
+        self, url: str, width: int, height: int, min_dimension: int, message: str = ""
+    ) -> None:
+        self.width = width
+        self.height = height
+        self.min_dimension = min_dimension
+        if not message:
+            message = (
+                f"image below minimum dimension at {url!r}: "
+                f"{width}x{height} < {min_dimension}px"
+            )
+        super().__init__(reason="below_min_dimension", url=url, message=message)
+
+
 # Extensions we accept when renaming downloaded images. Bing sometimes
 # returns URLs without an extension, so we use this set for the fallback.
 VALID_IMAGE_EXTENSIONS = {
@@ -138,6 +165,116 @@ DEFAULT_HEADERS = {
 DEFAULT_VERBOSE = False
 
 
+def _read_jpeg_dimensions(data: bytes) -> tuple[int, int] | None:
+    """Walk JPEG markers looking for a Start-Of-Frame (SOFn) segment."""
+    pos = 2  # skip the SOI marker (0xFFD8)
+    length = len(data)
+    while pos + 4 <= length:
+        if data[pos] != 0xFF:
+            pos += 1
+            continue
+        marker = data[pos + 1]
+        if marker == 0xDA:
+            # Start of Scan: entropy-coded data follows, with no more
+            # markers to find. SOFn always precedes SOS in a
+            # well-formed JPEG, so reaching this means dimensions
+            # weren't found; stop before scanning byte-stuffed scan
+            # data that could false-match a marker.
+            return None
+        # Standalone markers (no length field, no payload).
+        if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+            pos += 2
+            continue
+        seg_len = int.from_bytes(data[pos + 2 : pos + 4], "big")
+        is_sof = 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC)
+        if is_sof:
+            if pos + 9 > length:
+                return None
+            height = int.from_bytes(data[pos + 5 : pos + 7], "big")
+            width = int.from_bytes(data[pos + 7 : pos + 9], "big")
+            return width, height
+        pos += 2 + seg_len
+    return None
+
+
+def _read_webp_dimensions(data: bytes) -> tuple[int, int] | None:
+    """Parse a WEBP file's VP8 / VP8L / VP8X chunk header for canvas dimensions."""
+    chunk = data[12:16]
+    payload = data[20:]
+    if chunk == b"VP8X":
+        if len(payload) < 10:
+            return None
+        width = int.from_bytes(payload[4:7], "little") + 1
+        height = int.from_bytes(payload[7:10], "little") + 1
+        return width, height
+    if chunk == b"VP8L":
+        if len(payload) < 5 or payload[0] != 0x2F:
+            return None
+        bits = int.from_bytes(payload[1:5], "little")
+        width = (bits & 0x3FFF) + 1
+        height = ((bits >> 14) & 0x3FFF) + 1
+        return width, height
+    if chunk == b"VP8 ":
+        # 3-byte frame tag + 3-byte start code (0x9d 0x01 0x2a), then
+        # width/height as 16-bit little-endian (low 14 bits = size).
+        if len(payload) < 10 or payload[3:6] != b"\x9d\x01\x2a":
+            return None
+        width = int.from_bytes(payload[6:8], "little") & 0x3FFF
+        height = int.from_bytes(payload[8:10], "little") & 0x3FFF
+        return width, height
+    return None
+
+
+def _read_image_dimensions(data: bytes) -> tuple[int, int] | None:
+    """Best-effort ``(width, height)`` from raw image bytes (v3.6.0+).
+
+    Parses container headers directly for PNG, GIF, BMP, JPEG, and WEBP
+    without decoding pixel data, so it's cheap to run on every
+    downloaded image. Returns ``None`` for formats we don't parse
+    (e.g. TIFF) or on any malformed/truncated input. Callers must
+    treat ``None`` as "dimensions unknown, don't filter" rather than
+    "image too small" — we'd rather let an unmeasurable image through
+    than drop a valid one.
+    """
+    try:
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            # IHDR is always the first chunk: 4-byte length, "IHDR",
+            # then 4-byte width and 4-byte height (big-endian).
+            if len(data) >= 24 and data[12:16] == b"IHDR":
+                width = int.from_bytes(data[16:20], "big")
+                height = int.from_bytes(data[20:24], "big")
+                return width, height
+            return None
+
+        if data[:6] in (b"GIF87a", b"GIF89a"):
+            if len(data) >= 10:
+                width = int.from_bytes(data[6:8], "little")
+                height = int.from_bytes(data[8:10], "little")
+                return width, height
+            return None
+
+        if data[:2] == b"BM":
+            # BITMAPFILEHEADER (14 bytes) then BITMAPINFOHEADER width
+            # (offset 18) / height (offset 22) as little-endian int32.
+            # Height may be negative for top-down bitmaps.
+            if len(data) >= 26:
+                width = int.from_bytes(data[18:22], "little", signed=True)
+                height = int.from_bytes(data[22:26], "little", signed=True)
+                return abs(width), abs(height)
+            return None
+
+        if data[:2] == b"\xff\xd8":
+            return _read_jpeg_dimensions(data)
+
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            return _read_webp_dimensions(data)
+    except (IndexError, ValueError):
+        # Truncated/malformed header. Dimension sniffing must never
+        # crash a download, so treat this the same as "unmeasurable".
+        return None
+    return None
+
+
 class ImageEngine(ABC):
     """Base class for image search engine scrapers.
 
@@ -159,6 +296,7 @@ class ImageEngine(ABC):
         max_workers: int = 4,
         force_replace: bool = False,
         cancel=None,
+        min_dimension: int | None = None,
     ):
         # Abstract base class — subclasses MUST override ``run()``.
         # The abstractmethod below is what makes
@@ -184,6 +322,12 @@ class ImageEngine(ABC):
         # and image downloads. We don't import CancelToken here to
         # avoid a circular import; the type is duck-typed.
         self.cancel = cancel
+        # ``min_dimension`` (v3.6.0+): minimum width/height in pixels an
+        # image must have to be kept. ``None`` (the default) disables
+        # the check entirely. Subclasses (Bing, DuckDuckGo) accept this
+        # in their own constructors and forward via ``super().__init__()``;
+        # ``Downloader.search`` routes it through ``engine_kwargs``.
+        self.min_dimension: int | None = min_dimension
 
         self.seen: set[str] = set()
         self.download_count = 0  # newly downloaded this run
@@ -284,6 +428,9 @@ class ImageEngine(ABC):
             The HTTP fetch failed (timeout, 5xx, DNS error, etc.).
         InvalidImageError
             The fetched bytes don't look like an image.
+        BelowMinDimension
+            ``self.min_dimension`` is set and the image's width or
+            height is smaller than it (v3.6.0+).
         DuplicateImageError
             An image with the same MD5 hash has already been saved
             this run.
@@ -300,6 +447,18 @@ class ImageEngine(ABC):
         kind = filetype.guess(image)
         if not kind or not kind.mime.startswith("image/"):
             raise InvalidImageError(url=link)
+
+        if self.min_dimension is not None:
+            dimensions = _read_image_dimensions(image)
+            if dimensions is not None:
+                width, height = dimensions
+                if width < self.min_dimension or height < self.min_dimension:
+                    raise BelowMinDimension(
+                        url=link,
+                        width=width,
+                        height=height,
+                        min_dimension=self.min_dimension,
+                    )
 
         file_hash = hashlib.md5(image).hexdigest()
         with self._hash_lock:

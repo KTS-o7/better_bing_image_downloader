@@ -343,6 +343,35 @@ CLI equivalent:
 bbid --manifest --manifest-fields index,status,url,md5 "red panda"
 ```
 
+#### Minimum dimension filter (v3.6.0+)
+
+For ML training data, thumbnails are noise. Pass `min_dimension` to
+skip any image smaller than `N` pixels on either side before it's
+saved:
+
+```python
+from better_bing_image_downloader import Downloader
+
+dl = Downloader()
+result = dl.search(
+    "red panda", limit=100, engine="duckduckgo",
+    min_dimension=512,  # reject anything under 512x512
+)
+print(f"Saved {result.count} images, skipped {result.skipped} too-small ones")
+```
+
+Skipped images don't count against `result.images` or
+`result.errors` — `result.skipped` is incremented instead, since a
+too-small image is an intentional filter outcome, not a failure.
+With `manifest=True`, each skip is recorded as
+`{"status": "skipped", "error": "BelowMinDimension", ...}` so
+downstream tooling can audit exactly what was filtered and why.
+
+Dimensions are read from PNG, JPEG, GIF, BMP, and WEBP headers
+directly (no extra dependency). Formats we can't parse (e.g. TIFF)
+are never filtered — an unmeasurable image is always kept rather
+than dropped on a guess.
+
 ### Resume behaviour
 
 By default (`force_replace=False`), re-running the same query skips already-downloaded files and downloads only what's missing:

@@ -48,6 +48,7 @@ __all__ = [
     "InvalidImageError",
     "DuplicateImageError",
     "WriteError",
+    "BelowMinDimension",
     "CancelToken",
     "ManifestWriter",
     "DEFAULT_MANIFEST_FIELDS",
@@ -59,6 +60,7 @@ __all__ = [
 # etc. The actual class definitions live in base.py to avoid a
 # circular import (base.py -> downloader.py -> base.py).
 from .base import (  # noqa: E402
+    BelowMinDimension,
     DuplicateImageError,
     ImageSaveError,
     InvalidImageError,
@@ -296,6 +298,7 @@ class Downloader:
         manifest_path: str | os.PathLike | None = None,
         manifest_fields: list[str] | None = None,
         manifest_flush_every: int = 1,
+        min_dimension: int | None = None,
     ) -> Result:
         """Run a search and return a :class:`Result`.
 
@@ -336,6 +339,16 @@ class Downloader:
             default ``1`` is crash-safe; higher values trade crash
             safety for throughput on slow disks. ``close()`` always
             flushes regardless of this value. Default: ``1``.
+        min_dimension : int | None
+            Minimum width and height in pixels (v3.6.0+). If set, any
+            downloaded image smaller than this on either side is
+            skipped: it does not count toward :attr:`Result.images`
+            or :attr:`Result.errors`, is recorded in the manifest (if
+            ``manifest=True``) as ``status="skipped"``,
+            ``error="BelowMinDimension"``, and is counted in
+            :attr:`Result.skipped`. Images in formats we can't
+            measure (e.g. TIFF) are not filtered. Default ``None``
+            (no filtering).
         """
         image_dir = Path(output_dir) / query
         image_dir.mkdir(parents=True, exist_ok=True)
@@ -383,6 +396,16 @@ class Downloader:
         # (Bing, DuckDuckGo) can abort between page fetches.
         if cancel is not None:
             engine_kwargs["cancel"] = cancel
+        # ``min_dimension`` (v3.6.0+) flows through ``engine_kwargs``
+        # like every other option, the same way ``cancel`` does.
+        # Bing and DuckDuckGo accept it in their own constructors and
+        # forward it via ``super().__init__()``; custom engines that
+        # don't override ``__init__`` inherit support for it directly
+        # from ``ImageEngine``. As with ``cancel``, we only add the
+        # key when it's actually used so engines that don't accept it
+        # (and don't use the feature) are unaffected.
+        if min_dimension is not None:
+            engine_kwargs["min_dimension"] = min_dimension
 
         engine_obj = self.build_engine(
             engine_name=engine,
@@ -424,6 +447,12 @@ class Downloader:
         # actually invoked (not skipped due to resume). Useful for
         # debugging.
         save_attempts = 0
+        # ``min_dimension_skips`` (v3.6.0+) counts images rejected by
+        # the ``min_dimension`` filter. Unlike other ``ImageSaveError``
+        # subclasses, these don't go into ``errors`` — they're an
+        # intentional filter outcome, not a failure — so they need
+        # their own counter to feed into ``Result.skipped`` below.
+        min_dimension_skips = 0
         # ``progress_state`` tracks timing samples for ETA
         # computation. We need at least 2 samples (one for the
         # previous download, one for the current) to extrapolate.
@@ -447,7 +476,7 @@ class Downloader:
         original_download = engine_obj.download_image
 
         def save_with_hooks(link: str, file_path) -> bool:
-            nonlocal save_attempts
+            nonlocal save_attempts, min_dimension_skips
             save_attempts += 1
             try:
                 # ``_save_image_raising`` returns the MD5 hex digest
@@ -455,6 +484,23 @@ class Downloader:
                 # ``save_image`` wrapper does not return it; we
                 # rely on the raising variant here.
                 file_md5 = original_save_raising(link, file_path)
+            except BelowMinDimension as exc:
+                # v3.6.0+: a too-small image is an intentional filter
+                # outcome, not a failure — unlike the other
+                # ImageSaveError subclasses below, it does NOT go
+                # into Result.errors or fire on_error. It's recorded
+                # as a manifest "skip" and counted in Result.skipped.
+                min_dimension_skips += 1
+                if self._manifest_writer is not None:
+                    self._append_manifest_record(
+                        status="skipped",
+                        url=link,
+                        file_path=None,
+                        md5=None,
+                        error=exc,
+                        engine_obj=engine_obj,
+                    )
+                return False
             except ImageSaveError as exc:
                 # Typed save failure (v3.4.0+). Surface via on_error
                 # and Result.errors.
@@ -582,7 +628,11 @@ class Downloader:
         # incremented ``download_count`` without ``_slots_used`` (or
         # vice versa), the subtraction can go negative. We don't
         # want a nonsensical negative count in the result.
-        skipped = max(0, engine_obj._slots_used - engine_obj.download_count)
+        # ``min_dimension_skips`` (v3.6.0+) is added on top: those
+        # images never touch ``_slots_used``/``download_count`` at
+        # all (the engine just moves on to the next candidate), so
+        # they need to be folded in separately.
+        skipped = max(0, engine_obj._slots_used - engine_obj.download_count) + min_dimension_skips
 
         result = Result(
             query=query,
@@ -685,6 +735,7 @@ class Downloader:
         manifest_path: str | os.PathLike | None = None,
         manifest_fields: list[str] | None = None,
         manifest_flush_every: int = 1,
+        min_dimension: int | None = None,
     ) -> Result:
         """Async wrapper around :meth:`search`.
 
@@ -738,6 +789,7 @@ class Downloader:
             manifest_path=manifest_path,
             manifest_fields=manifest_fields,
             manifest_flush_every=manifest_flush_every,
+            min_dimension=min_dimension,
         )
 
 
