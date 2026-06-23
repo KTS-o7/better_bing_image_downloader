@@ -324,10 +324,9 @@ class ImageEngine(ABC):
         self.cancel = cancel
         # ``min_dimension`` (v3.6.0+): minimum width/height in pixels an
         # image must have to be kept. ``None`` (the default) disables
-        # the check entirely. Bing/DuckDuckGo don't accept this in
-        # their own constructors; ``Downloader.search`` sets it
-        # directly on the engine instance after construction (see
-        # downloader.py), the same way it monkey-patches save_image.
+        # the check entirely. Subclasses (Bing, DuckDuckGo) accept this
+        # in their own constructors and forward via ``super().__init__()``;
+        # ``Downloader.search`` routes it through ``engine_kwargs``.
         self.min_dimension: int | None = min_dimension
 
         self.seen: set[str] = set()
