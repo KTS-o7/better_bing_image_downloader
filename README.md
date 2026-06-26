@@ -2,6 +2,7 @@
 
 A fast, reliable Python library and CLI tool for bulk downloading images from Bing or DuckDuckGo.
 
+[![Tests](https://github.com/KTS-o7/better_bing_image_downloader/actions/workflows/test.yml/badge.svg)](https://github.com/KTS-o7/better_bing_image_downloader/actions/workflows/test.yml)
 [![GitHub top language](https://img.shields.io/github/languages/top/KTS-o7/better_bing_image_downloader)](https://github.com/KTS-o7/better_bing_image_downloader)
 [![GitHub](https://img.shields.io/github/license/KTS-o7/better_bing_image_downloader)](https://github.com/KTS-o7/better_bing_image_downloader/blob/main/LICENSE)
 [![PyPI version](https://badge.fury.io/py/better-bing-image-downloader.svg)](https://pypi.org/project/better-bing-image-downloader/)

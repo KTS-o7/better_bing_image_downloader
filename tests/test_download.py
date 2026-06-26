@@ -3,6 +3,7 @@ import tempfile
 from unittest.mock import MagicMock, patch
 
 from better_bing_image_downloader.download import downloader
+from better_bing_image_downloader.downloader import Downloader
 
 
 def _mock_bing_factory():
@@ -13,8 +14,9 @@ def _mock_bing_factory():
     mock_instance.seen = set()
     mock_instance.manifest = {}
     mock_instance.run = MagicMock()  # don't actually run anything
-    return patch(
-        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+    return patch.object(
+        Downloader,
+        "_DEFAULT_REGISTRY",
         {
             "bing": MagicMock(return_value=mock_instance),
             "duckduckgo": MagicMock(return_value=mock_instance),
@@ -51,8 +53,9 @@ def test_downloader_does_not_call_input():
     """downloader() must never call input() — no interactive prompts"""
     tmp = tempfile.mkdtemp()
     mock_cls = _build_mock_engine_cls(5)
-    with patch(
-        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+    with patch.object(
+        Downloader,
+        "_DEFAULT_REGISTRY",
         {"bing": mock_cls, "duckduckgo": mock_cls},
     ), patch("builtins.input", side_effect=AssertionError("input() must not be called!")):
         result = downloader("cats", limit=5, output_dir=tmp)
@@ -64,8 +67,9 @@ def test_downloader_returns_int():
     """downloader() must return the number of downloaded images as int"""
     tmp = tempfile.mkdtemp()
     mock_cls = _build_mock_engine_cls(3)
-    with patch(
-        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+    with patch.object(
+        Downloader,
+        "_DEFAULT_REGISTRY",
         {"bing": mock_cls, "duckduckgo": mock_cls},
     ):
         result = downloader("cats", limit=3, output_dir=tmp)
@@ -77,8 +81,9 @@ def test_downloader_badsites_default_not_shared():
     """badsites=None default must not produce shared list between calls"""
     tmp = tempfile.mkdtemp()
     mock_cls = _build_mock_engine_cls(0)
-    with patch(
-        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+    with patch.object(
+        Downloader,
+        "_DEFAULT_REGISTRY",
         {"bing": mock_cls, "duckduckgo": mock_cls},
     ):
         downloader("cats", limit=1, output_dir=tmp)
@@ -102,8 +107,9 @@ def test_downloader_force_replace_deletes_existing_dir():
         f.write("should be deleted")
 
     mock_cls = _build_mock_engine_cls(0)
-    with patch(
-        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+    with patch.object(
+        Downloader,
+        "_DEFAULT_REGISTRY",
         {"bing": mock_cls, "duckduckgo": mock_cls},
     ):
         downloader("cats", limit=1, output_dir=tmp, force_replace=True)
@@ -117,8 +123,9 @@ def test_downloader_old_filter_param_works_with_deprecation_warning():
 
     tmp = tempfile.mkdtemp()
     mock_cls = _build_mock_engine_cls(0)
-    with patch(
-        "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+    with patch.object(
+        Downloader,
+        "_DEFAULT_REGISTRY",
         {"bing": mock_cls, "duckduckgo": mock_cls},
     ):
         with warnings.catch_warnings(record=True) as w:

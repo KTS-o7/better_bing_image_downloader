@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from better_bing_image_downloader.bing import Bing
 from better_bing_image_downloader.download import downloader
+from better_bing_image_downloader.downloader import Downloader
 
 
 class TestResumeSupport:
@@ -46,8 +47,9 @@ class TestManifest:
         # can write it out to disk on the way through.
         mock_instance.manifest = {"Image_1.jpg": "http://example.com/img.jpg"}
 
-        with patch(
-            "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        with patch.object(
+            Downloader,
+            "_DEFAULT_REGISTRY",
             {"bing": mock_cls, "duckduckgo": mock_cls},
         ):
             downloader("cats", limit=1, output_dir=str(tmp_path))
@@ -69,8 +71,9 @@ class TestManifest:
         mock_instance = mock_cls.return_value
         mock_instance.manifest = {"Image_2.jpg": "http://example.com/2.jpg"}
 
-        with patch(
-            "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        with patch.object(
+            Downloader,
+            "_DEFAULT_REGISTRY",
             {"bing": mock_cls, "duckduckgo": mock_cls},
         ):
             downloader("cats", limit=1, output_dir=str(tmp_path))
