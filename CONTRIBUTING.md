@@ -125,6 +125,25 @@ line stays under 72 characters; the body, if any, is wrapped at 72.
    git push origin feat/my-feature
    gh pr create --fill
    ```
+### Commit signing
+
+This repository enforces GPG or SSH-signed commits on the `main` branch.
+
+**Set up GPG signing locally:**
+
+```bash
+# Generate a GPG key (choose RSA 4096)
+gpg --full-generate-key
+
+# Find your key ID
+gpg --list-secret-keys --keyid-format=long
+
+# Tell Git to use it
+git config --global user.signingkey <YOUR_KEY_ID>
+git config --global commit.gpgsign true
+
+# Export your public key and add it to GitHub → Settings → SSH and GPG keys
+gpg --armor --export <YOUR_KEY_ID>
 
 5.1. **Sign your commits.** This repository's `main` branch requires
    GPG- or SSH-signed commits (`required_signatures: true`). Before
