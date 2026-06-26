@@ -11,8 +11,10 @@ repository. Read this before making non-trivial changes.
 - **Python:** 3.8+. Pure-stdlib HTTP (urllib), `brotli` for DuckDuckGo
   (hard dep since v3.1.1), optional `selenium` for the legacy
   `multidownloader` path.
-- **No CI is configured** (per the maintainer's request). Lint/type/test
-  is run locally before pushing.
+- **CI**: `.github/workflows/test.yml` runs on every PR and push to
+  `main` — pytest (network tests skipped), `ruff check`, and `mypy`
+  across Python 3.8 / 3.10 / 3.12. Run the same checks locally before
+  pushing; `pre-commit` covers `black`/`ruff`/`mypy` on commit.
 - **Tests:** 149 passing, 2 network tests skipped by default
   (`BBID_RUN_NETWORK_TESTS=1` to enable).
 - **Linters:** `black` (formatter), `ruff` (lint), `mypy` (types).
