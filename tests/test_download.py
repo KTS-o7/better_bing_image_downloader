@@ -53,11 +53,14 @@ def test_downloader_does_not_call_input():
     """downloader() must never call input() — no interactive prompts"""
     tmp = tempfile.mkdtemp()
     mock_cls = _build_mock_engine_cls(5)
-    with patch.object(
-        Downloader,
-        "_DEFAULT_REGISTRY",
-        {"bing": mock_cls, "duckduckgo": mock_cls},
-    ), patch("builtins.input", side_effect=AssertionError("input() must not be called!")):
+    with (
+        patch.object(
+            Downloader,
+            "_DEFAULT_REGISTRY",
+            {"bing": mock_cls, "duckduckgo": mock_cls},
+        ),
+        patch("builtins.input", side_effect=AssertionError("input() must not be called!")),
+    ):
         result = downloader("cats", limit=5, output_dir=tmp)
 
     assert result == 5
