@@ -144,6 +144,24 @@ git config --global commit.gpgsign true
 
 # Export your public key and add it to GitHub → Settings → SSH and GPG keys
 gpg --armor --export <YOUR_KEY_ID>
+```
+
+**Set up SSH signing locally (modern alternative):**
+
+```bash
+# Use an existing SSH key, or generate one
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# Tell Git to use SSH signing
+git config --global gpg.format ssh
+git config --global user.signingkey ~/.ssh/id_ed25519.pub
+
+# Sign all commits automatically
+git config --global commit.gpgsign true
+
+# Upload ~/.ssh/id_ed25519.pub to GitHub → Settings → SSH and GPG keys
+# (GitHub auto-detects whether a key is used for auth or signing)
+```
 
 5.1. **Sign your commits.** This repository's `main` branch requires
    GPG- or SSH-signed commits (`required_signatures: true`). Before
