@@ -9,14 +9,13 @@ description = "Bulk image downloader from Bing or DuckDuckGo (no browser require
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Krishnatejaswi S", email = "shentharkrishnatejaswi@gmail.com" }]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 keywords = [
     "bing", "duckduckgo", "images", "scraping",
     "image download", "bulk image downloader",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -66,11 +65,11 @@ better_bing_image_downloader = ["py.typed"]
 
 [tool.black]
 line-length = 100
-target-version = ["py38"]
+target-version = ["py39"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py38"
+target-version = "py39"
 extend-exclude = [
     "better_bing_image_downloader/crawler.py",
     "better_bing_image_downloader/multidownloader.py",

@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from better_bing_image_downloader.bing import Bing
 from better_bing_image_downloader.download import downloader
+from better_bing_image_downloader.downloader import Downloader
 
 
 class TestResumeSupport:
@@ -46,8 +47,9 @@ class TestManifest:
         # can write it out to disk on the way through.
         mock_instance.manifest = {"Image_1.jpg": "http://example.com/img.jpg"}
 
-        with patch(
-            "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        with patch.object(
+            Downloader,
+            "_DEFAULT_REGISTRY",
             {"bing": mock_cls, "duckduckgo": mock_cls},
         ):
             downloader("cats", limit=1, output_dir=str(tmp_path))
@@ -69,8 +71,9 @@ class TestManifest:
         mock_instance = mock_cls.return_value
         mock_instance.manifest = {"Image_2.jpg": "http://example.com/2.jpg"}
 
-        with patch(
-            "better_bing_image_downloader.downloader.Downloader._DEFAULT_REGISTRY",
+        with patch.object(
+            Downloader,
+            "_DEFAULT_REGISTRY",
             {"bing": mock_cls, "duckduckgo": mock_cls},
         ):
             downloader("cats", limit=1, output_dir=str(tmp_path))
@@ -104,9 +107,10 @@ class TestDeduplication:
         b = Bing("cats", 10, str(tmp_path), "off", 10)
         fake_image = b"\xff\xd8\xff" * 100
 
-        with patch("better_bing_image_downloader.base.urllib.request.urlopen") as mock_open, patch(
-            "better_bing_image_downloader.base.filetype.guess"
-        ) as mock_ft:
+        with (
+            patch("better_bing_image_downloader.base.urllib.request.urlopen") as mock_open,
+            patch("better_bing_image_downloader.base.filetype.guess") as mock_ft,
+        ):
             mock_response = MagicMock()
             mock_response.read.return_value = fake_image
             mock_response.__enter__ = lambda s: s
@@ -126,9 +130,10 @@ class TestDeduplication:
         """Two save_image calls with different bytes should both be saved"""
         b = Bing("cats", 10, str(tmp_path), "off", 10)
 
-        with patch("better_bing_image_downloader.base.urllib.request.urlopen") as mock_open, patch(
-            "better_bing_image_downloader.base.filetype.guess"
-        ) as mock_ft:
+        with (
+            patch("better_bing_image_downloader.base.urllib.request.urlopen") as mock_open,
+            patch("better_bing_image_downloader.base.filetype.guess") as mock_ft,
+        ):
             mock_kind = MagicMock()
             mock_kind.mime = "image/jpeg"
             mock_ft.return_value = mock_kind
