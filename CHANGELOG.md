@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump `actions/checkout` from v4 to v5 and `actions/setup-python`
+  from v5 to v6 in both `.github/workflows/test.yml` and
+  `.github/workflows/python-publish.yml`. The v4/v5 lines target
+  Node.js 20, which GitHub has deprecated on hosted runners
+  (forced to Node 24 since September 2025); the v5/v6 lines are
+  the first versions that target Node 24 natively.
+
 ## [3.7.0] - 2026-07-26
 
 ### Added
