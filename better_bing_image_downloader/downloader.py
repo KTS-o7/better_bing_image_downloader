@@ -31,7 +31,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from .base import DEFAULT_VERBOSE, ImageEngine
 from .bing import Bing
@@ -134,7 +134,11 @@ HookOnEngineDone = Callable[[str, Result], None]  # (engine, result)
 
 # Progress hook signature: (percent, downloaded, total, eta_seconds).
 # ``eta_seconds`` is None until we have at least one timing sample.
-HookOnProgress = Callable[[float, int, int, float | None], None]
+# Written as ``Optional[float]`` rather than ``float | None`` because
+# this is a module-level expression (not a forward-reference annotation
+# governed by ``from __future__ import annotations``), and the PEP 604
+# ``X | Y`` union syntax only evaluates at runtime on Python 3.10+.
+HookOnProgress = Callable[[float, int, int, Optional[float]], None]
 
 
 class Downloader:
