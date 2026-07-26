@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-07-26
+
 ### Fixed
 
 - `HookOnProgress` (the `on_progress` hook type alias) used the
@@ -14,9 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expression, which evaluates at runtime and so raised
   `TypeError: unsupported operand type(s) for |: 'type' and
   'NoneType'` on Python ≤3.9. Switched to `Optional[float]`.
-  Caught immediately by the new CI matrix (3.9 job failed on
-  the v3.7.0 release push); the other `HookOn*` aliases were
-  already safe because they don't use PEP 604 unions.
+  This made v3.7.0 unimportable on the 3.9 part of the new CI
+  matrix, so v3.7.0 is being yanked in favor of this release.
+  The other `HookOn*` aliases were already safe because they
+  don't use PEP 604 unions.
 
 ### Changed
 
@@ -25,7 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.github/workflows/python-publish.yml`. The v4/v5 lines target
   Node.js 20, which GitHub has deprecated on hosted runners
   (forced to Node 24 since September 2025); the v5/v6 lines are
-  the first versions that target Node 24 natively.
+  the first versions that target Node 24 natively. Internal;
+  no runtime effect on the published package.
 
 ## [3.7.0] - 2026-07-26
 
