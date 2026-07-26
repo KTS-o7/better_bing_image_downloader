@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `HookOnProgress` (the `on_progress` hook type alias) used the
+  PEP 604 `float | None` union syntax in a module-level
+  expression, which evaluates at runtime and so raised
+  `TypeError: unsupported operand type(s) for |: 'type' and
+  'NoneType'` on Python ≤3.9. Switched to `Optional[float]`.
+  Caught immediately by the new CI matrix (3.9 job failed on
+  the v3.7.0 release push); the other `HookOn*` aliases were
+  already safe because they don't use PEP 604 unions.
+
 ### Changed
 
 - Bump `actions/checkout` from v4 to v5 and `actions/setup-python`
