@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-07-26
+
+### Added
+
+- **GitHub Actions CI workflow** (`.github/workflows/test.yml`).
+  Runs on every pull request and push to `main`, matrixed across
+  Python 3.9 / 3.10 / 3.12. Steps: `pytest` (network tests
+  skipped), `ruff check`, `black --check`, `mypy`. Resolves the
+  long-standing "no CI" gap — the workflow catches real
+  cross-version regressions (e.g. the `unittest.mock` string-target
+  bug fixed alongside this release). CI badge added to the README.
+- **Commit signing documentation** in `CONTRIBUTING.md`. Covers
+  both GPG and SSH signing setup, including how to verify a
+  signature locally and the `unknown_key` rejection path
+  enforced by the `main` branch's `required_signatures: true`
+  policy.
+
+### Changed
+
+- **Minimum Python version bumped from 3.8 to 3.9.** Python 3.8
+  reached end-of-life in October 2024 and is no longer receiving
+  security updates. `requires-python` in `pyproject.toml` is now
+  `>=3.9`; the 3.8 classifier was removed; and `[tool.black]`
+  and `[tool.ruff]` `target-version` are now `py39` so the
+  formatters can use syntax idiomatic on the supported floors
+  (e.g. parenthesized context managers).
+- `AGENTS.md` updated to document the new CI workflow in place
+  of the prior "no CI configured" note.
+
+### Fixed
+
+- `unittest.mock.patch("...downloader.Downloader._DEFAULT_REGISTRY")`
+  resolved incorrectly on Python ≤3.10 because the package's
+  `__init__.py` re-exports the legacy `downloader()` *function*
+  under the same name as the `downloader` *module*, and `mock`'s
+  pre-3.11 string-target resolution walks that dotted path
+  attribute-by-attribute instead of using `importlib`. Fixed
+  across 12 call sites in `tests/test_engine.py`,
+  `tests/test_download.py`, and `tests/test_features.py` by
+  importing `Downloader` directly and using `patch.object()`. A
+  detailed comment in `test_engine.py` documents the exact
+  mechanism so future contributors don't reintroduce the bug.
+- Two `TestMultidownloaderDeprecated` tests that import the
+  deprecated `crawler` / `multidownloader` modules (which pull
+  in `selenium` unconditionally) are now gated behind
+  `pytest.importorskip("selenium")`. CI installs only the
+  `[dev]` extra, so these would otherwise fail on import.
+
+### Tests
+
+- Test count now 166 passing, 2 network tests skipped by default
+  (up from 149 in 3.5.0 / 3.6.0 — the increase is mostly the
+  new `min_dimension` coverage landed in 3.6.0 plus a few
+  additions accumulated during 3.6.x patch cycles).
+
 ## [3.6.0] - 2026-06-23
 
 ### Added
