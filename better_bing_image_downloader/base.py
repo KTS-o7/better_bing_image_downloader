@@ -297,6 +297,7 @@ class ImageEngine(ABC):
         force_replace: bool = False,
         cancel=None,
         min_dimension: int | None = None,
+        proxy: str | None = None,
     ):
         # Abstract base class — subclasses MUST override ``run()``.
         # The abstractmethod below is what makes
@@ -316,6 +317,22 @@ class ImageEngine(ABC):
         self.image_name = name
         self.max_workers = max(1, min(max_workers, 16))
         self.force_replace = force_replace
+        # ``proxy`` (v3.8.0+): optional ``http://`` / ``https://`` proxy
+        # URL used for every HTTP request this engine makes (search
+        # page fetches and image downloads). ``None`` (the default)
+        # keeps the engine on the environment-configured proxy
+        # behaviour of :func:`urllib.request.urlopen`. Threaded
+        # through ``Downloader(proxy=...)`` -> ``Downloader.search``
+        # -> engine constructors.
+        self.proxy: str | None = proxy
+        # ``self.opener`` is the engine's own opener. When ``proxy`` is
+        # set it carries a :class:`urllib.request.ProxyHandler` for
+        # http/https; otherwise it is a plain default opener (identical
+        # in behaviour to the module-level ``urlopen``, including
+        # honouring ``HTTP_PROXY``/``HTTPS_PROXY`` env vars). Subclasses
+        # that build their own opener (e.g. DuckDuckGo's cookie-jar
+        # opener) must layer the same ``ProxyHandler`` on top.
+        self.opener = self._build_opener()
         # ``cancel`` is an optional ``CancelToken`` (from
         # ``downloader.py``). The base class stores it; concrete
         # engines (Bing, DuckDuckGo) check it between page fetches
@@ -371,15 +388,45 @@ class ImageEngine(ABC):
 
     # --- HTTP helpers ---
 
+    def _build_opener(self) -> urllib.request.OpenerDirector:
+        """Build the opener used for this engine's HTTP requests.
+
+        When :attr:`proxy` is set, returns an opener whose
+        :class:`urllib.request.ProxyHandler` routes both http and https
+        through the proxy URL. Otherwise returns a default opener
+        (equivalent to the module-level ``urllib.request.urlopen``,
+        which honours the standard ``HTTP_PROXY``/``HTTPS_PROXY``
+        environment variables).
+
+        DuckDuckGo overrides this in its own ``__init__`` to keep its
+        cookie-jar handler while still layering the same
+        ``ProxyHandler`` on top when a proxy is configured.
+        """
+        if self.proxy:
+            return urllib.request.build_opener(
+                urllib.request.ProxyHandler({"http": self.proxy, "https": self.proxy})
+            )
+        return urllib.request.build_opener()
+
     def _http_get(self, url: str, headers: dict | None = None) -> bytes:
         """GET ``url`` with the engine's default headers merged with overrides."""
         merged = dict(DEFAULT_HEADERS)
         if headers:
             merged.update(headers)
         request = urllib.request.Request(url, None, headers=merged)
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            data: bytes = response.read()
-            return data
+        data: bytes
+        if self.proxy:
+            # Proxy configured: route through the engine's proxied
+            # opener so the download goes via the proxy.
+            with self.opener.open(request, timeout=self.timeout) as response:
+                data = response.read()
+        else:
+            # No proxy: keep using the module-level ``urlopen`` exactly as
+            # before (it honours HTTP_PROXY/HTTPS_PROXY env vars and is the
+            # boundary existing tests mock).
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                data = response.read()
+        return data
 
     def is_cancelled(self) -> bool:
         """Return ``True`` if the user has called ``cancel_token.cancel()``.

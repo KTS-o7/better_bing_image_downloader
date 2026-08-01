@@ -158,6 +158,27 @@ for img in result.images:
     # img.size_bytes, img.mime_type, img.engine, img.query also available
 ```
 
+#### Routing through a proxy
+
+If your network requires an HTTP/HTTPS proxy (corporate firewall, ML
+training infra that proxies outbound HTTP, regions where Bing/DuckDuckGo
+block direct requests), configure it once on the `Downloader` and every
+request — search page fetches and image downloads — is routed through it:
+
+```python
+from better_bing_image_downloader import Downloader
+
+dl = Downloader(proxy="http://proxy.example.com:8080")
+result = dl.search("red panda", limit=10, engine="duckduckgo")
+```
+
+The proxy is fixed for the lifetime of the `Downloader` instance
+(matching the cookie-jar/opener model). To rotate proxies, construct a
+new `Downloader` per proxy. With no `proxy` set, requests behave exactly
+as before and honour the standard `HTTP_PROXY`/`HTTPS_PROXY` environment
+variables. Only HTTP/HTTPS proxies are supported in v1 of this feature
+(no SOCKS5).
+
 #### Plugging in a custom engine
 
 Subclass `ImageEngine`, register it, and the `Downloader` will route to it:
@@ -445,6 +466,9 @@ bbid "logo design" \
 
 # Exclude sites
 bbid "puppies" --limit 200 --bad-sites stock.adobe.com shutterstock.com
+
+# Through an HTTP/HTTPS proxy
+bbid "mountain landscape" --limit 100 --proxy http://proxy.example.com:8080
 ```
 
 ### CLI options
@@ -466,6 +490,7 @@ bbid "puppies" --limit 200 --bad-sites stock.adobe.com shutterstock.com
 | `--mkt` | `-m` | `en-US` | Bing market code (Bing only) |
 | `--ddg-safe-search` | | `moderate` | DuckDuckGo safe-search: `strict`, `moderate`, `off` |
 | `--ddg-region` | | `us-en` | DuckDuckGo region code |
+| `--proxy` | | `None` | HTTP/HTTPS proxy URL for all requests (e.g. `http://proxy:8080`) |
 | `--version` | | | Show version and exit |
 
 ## Parameters

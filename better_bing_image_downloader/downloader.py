@@ -149,6 +149,20 @@ class Downloader:
     non-trivial integration: looping over many queries, embedding in a
     web service, building a custom engine, or wiring in a UI.
 
+    Parameters
+    ----------
+    cache_dir : Path | None
+        Optional directory to cache downloaded images in.
+    on_image, on_error, on_engine_start, on_engine_done, on_progress :
+        Optional lifecycle hooks, see ``HookOn*`` type aliases.
+    proxy : str | None
+        Optional HTTP/HTTPS proxy URL (e.g. ``"http://proxy:8080"``).
+        When set, every request this Downloader makes — search page
+        fetches and image downloads — is routed through the proxy via a
+        ``urllib.request.ProxyHandler``. With ``None`` (default),
+        requests behave exactly as before and honour the standard
+        ``HTTP_PROXY``/``HTTPS_PROXY`` environment variables.
+
     Examples
     --------
     Minimal one-liner:
@@ -182,16 +196,21 @@ class Downloader:
         on_engine_start: HookOnEngineStart | None = None,
         on_engine_done: HookOnEngineDone | None = None,
         on_progress: HookOnProgress | None = None,
+        proxy: str | None = None,
     ) -> None:
         # --- Session: shared cookie jar + connection-pooled opener ---
         # The cookie jar is critical for DuckDuckGo: the vqd token is
         # tied to a session cookie, and reusing it across calls avoids
         # the 60+ KB /images redirect we would otherwise get on every
         # search.
+        self.proxy = proxy
         self.cookie_jar = http.cookiejar.CookieJar()
-        self.opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self.cookie_jar),
-        )
+        opener_handlers: list[urllib.request.BaseHandler] = [
+            urllib.request.HTTPCookieProcessor(self.cookie_jar)
+        ]
+        if proxy:
+            opener_handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
+        self.opener = urllib.request.build_opener(*opener_handlers)
 
         self.cache_dir = Path(cache_dir) if cache_dir else None
 
@@ -410,6 +429,14 @@ class Downloader:
         # (and don't use the feature) are unaffected.
         if min_dimension is not None:
             engine_kwargs["min_dimension"] = min_dimension
+
+        # ``proxy`` (v3.8.0+) is set once at ``Downloader`` construction
+        # (a single instance has one proxy for its lifetime, matching
+        # the cookie-jar/opener model). Forward it to the engine so it
+        # can build its own proxied opener; see the note above about
+        # only adding the key when it's actually used.
+        if self.proxy is not None:
+            engine_kwargs["proxy"] = self.proxy
 
         engine_obj = self.build_engine(
             engine_name=engine,

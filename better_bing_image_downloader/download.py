@@ -48,6 +48,7 @@ def downloader(
     manifest_fields: list[str] | None = None,
     manifest_flush_every: int = 1,
     min_dimension: int | None = None,
+    proxy: str | None = None,
     **kwargs,
 ) -> int:
     """Download images matching ``query`` using the chosen search engine.
@@ -96,6 +97,11 @@ def downloader(
         Minimum width/height in pixels (v3.6.0+). Images smaller than
         this on either side are skipped. ``None`` (the default)
         disables the filter.
+    proxy : str | None
+        Optional ``http://`` / ``https://`` proxy URL (v3.8.0+). When
+        set, every request (search page fetches and image downloads)
+        is routed through the proxy. ``None`` (the default) keeps the
+        environment-configured proxy behaviour.
 
     Returns
     -------
@@ -129,7 +135,7 @@ def downloader(
 
     logging.info("Downloading Images to %s", image_dir)
 
-    dl = Downloader()
+    dl = Downloader(proxy=proxy)
     pbar_cm = None
     if verbose:
         pbar_cm = tqdm(
@@ -353,6 +359,15 @@ def main() -> None:
         default=None,
         help="Minimum width/height in pixels; smaller images are skipped (default: no filtering).",
     )
+    parser.add_argument(
+        "--proxy",
+        type=str,
+        default=None,
+        help=(
+            "HTTP/HTTPS proxy URL to route all requests through "
+            "(e.g. http://proxy.example.com:8080). Default: environment proxy."
+        ),
+    )
 
     args = parser.parse_args()
     logging.basicConfig(
@@ -385,6 +400,7 @@ def main() -> None:
         manifest_fields=manifest_fields_list,
         manifest_flush_every=args.manifest_flush_every,
         min_dimension=args.min_dimension,
+        proxy=args.proxy,
     )
 
 

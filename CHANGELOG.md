@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **HTTP/HTTPS proxy support.** `Downloader(proxy=...)`,
+  `downloader(proxy=...)` and the `bbid --proxy` CLI flag now route
+  every request (search page fetches and image downloads) through a
+  configured HTTP/HTTPS proxy via `urllib.request.ProxyHandler`.
+  With no proxy configured, behaviour is unchanged (module-level
+  `urllib.request.urlopen` is still used, honouring
+  `HTTP_PROXY`/`HTTPS_PROXY` env vars). SOCKS5 proxies are not yet
+  supported.
+
 ## [3.7.1] - 2026-07-26
 
 ### Fixed

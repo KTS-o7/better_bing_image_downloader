@@ -52,6 +52,23 @@ _BROTLI_MISSING_MSG = (
 )
 
 
+def _build_opener(
+    cookie_jar: http.cookiejar.CookieJar, proxy: str | None = None
+) -> urllib.request.OpenerDirector:
+    """Build a cookie-aware opener, optionally routing through ``proxy``.
+
+    DuckDuckGo needs a :class:`http.cookiejar.CookieJar` so the session
+    cookie set on the vqd-token fetch is replayed to ``i.js``. When a
+    proxy URL is configured (v3.8.0+), a
+    :class:`urllib.request.ProxyHandler` is layered on top so both the
+    token fetch and the image pages go through it.
+    """
+    handlers: list[urllib.request.BaseHandler] = [urllib.request.HTTPCookieProcessor(cookie_jar)]
+    if proxy:
+        handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
+    return urllib.request.build_opener(*handlers)
+
+
 class DuckDuckGo(ImageEngine):
     """Download images from DuckDuckGo's image search.
 
@@ -104,6 +121,7 @@ class DuckDuckGo(ImageEngine):
         region: str = "us-en",
         cancel=None,
         min_dimension: int | None = None,
+        proxy: str | None = None,
     ):
         super().__init__(
             query=query,
@@ -117,6 +135,7 @@ class DuckDuckGo(ImageEngine):
             force_replace=force_replace,
             cancel=cancel,
             min_dimension=min_dimension,
+            proxy=proxy,
         )
         if safe_search not in self.VALID_SAFE_SEARCH:
             raise ValueError(
@@ -127,9 +146,7 @@ class DuckDuckGo(ImageEngine):
         self.region = region
         self._backoff = self.BACKOFF_INITIAL
         self._cookie_jar = http.cookiejar.CookieJar()
-        self._opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self._cookie_jar)
-        )
+        self._opener = _build_opener(self._cookie_jar, self.proxy)
         if not _HAS_BROTLI:
             raise ImportError(_BROTLI_MISSING_MSG)
 
@@ -209,9 +226,7 @@ class DuckDuckGo(ImageEngine):
         """Fetch a single page of image URLs from ``i.js``."""
         url = self._build_page_url(vqd, offset)
         # i.js must be requested as XHR
-        opener_with_xhr = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(self._cookie_jar)
-        )
+        opener_with_xhr = _build_opener(self._cookie_jar, self.proxy)
         # Tell opener to add X-Requested-With via a custom addheaders
         opener_with_xhr.addheaders = [
             ("X-Requested-With", "XMLHttpRequest"),
