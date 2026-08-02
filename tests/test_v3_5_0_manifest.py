@@ -491,6 +491,84 @@ def test_search_manifest_records_index_is_one_based_and_sequential(tmp_path: Pat
     assert indices == [1, 2, 3]
 
 
+def _make_png(width: int, height: int) -> bytes:
+    """Header-only PNG for dimension filtering (no real pixel data)."""
+    import struct
+
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    chunk = struct.pack(">I", len(ihdr_data)) + b"IHDR" + ihdr_data + b"\x00\x00\x00\x00"
+    return sig + chunk
+
+
+def test_search_manifest_consecutive_errors_get_unique_indices(tmp_path: Path) -> None:
+    """Two consecutive failures with no success between them must not share an index (#38)."""
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+
+    class TwoConsecutiveErrorsStub(ImageEngine):
+        def run(self) -> None:
+            self.download_image("https://x.test/a.png", 1)
+            self.download_image("https://x.test/b.png", 2)
+
+    dl.register("bad", TwoConsecutiveErrorsStub)
+
+    def failing_http_get(self, url, headers=None):
+        raise OSError("simulated network failure")
+
+    with patch.object(_base.ImageEngine, "_http_get", failing_http_get):
+        result = dl.search("q", limit=2, engine="bad", output_dir=tmp_path, manifest=True)
+
+    lines = Path(result.manifest_path).read_text(encoding="utf-8").splitlines()
+    indices = [json.loads(line)["index"] for line in lines]
+    assert indices == [1, 2]
+    assert len(set(indices)) == len(indices)
+
+
+def test_search_manifest_mixed_records_indices_strictly_increasing(tmp_path: Path) -> None:
+    """error + ok + min_dimension-skip records produce unique, sequential indices (#38)."""
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+
+    class MixedStub(ImageEngine):
+        def run(self) -> None:
+            # 1: error (broken bytes)
+            self.download_image("https://x.test/broken.jpg", 1)
+            # 2: ok (large image)
+            self.download_image("https://x.test/large.png", 2)
+            # 3: min_dimension skip (tiny image)
+            self.download_image("https://x.test/tiny.png", 3)
+
+    dl.register("mixed", MixedStub)
+
+    def fake_http_get(self, url, headers=None):
+        if "broken" in url:
+            return b"not an image"
+        if "tiny" in url:
+            return _make_png(10, 10)
+        return _make_png(800, 600)
+
+    with patch.object(_base.ImageEngine, "_http_get", fake_http_get):
+        result = dl.search(
+            "q",
+            limit=3,
+            engine="mixed",
+            output_dir=tmp_path,
+            manifest=True,
+            min_dimension=200,
+        )
+
+    lines = Path(result.manifest_path).read_text(encoding="utf-8").splitlines()
+    records = [json.loads(line) for line in lines]
+    statuses = [r["status"] for r in records]
+    indices = [r["index"] for r in records]
+    assert statuses == ["error", "ok", "skipped"]
+    assert indices == [1, 2, 3]
+    assert indices == sorted(set(indices))
+
+
 def test_search_manifest_records_have_utc_timestamp(tmp_path: Path) -> None:
     """downloaded_at is an ISO 8601 UTC string with a trailing 'Z'."""
     from better_bing_image_downloader import base as _base
@@ -742,7 +820,9 @@ def test_result_repr_includes_manifest_path_when_set(tmp_path: Path) -> None:
     text = repr(r)
     assert "manifest.jsonl" in text
     assert "manifest_path" in text
-    assert str(tmp_path / "manifest.jsonl") in text
+    # ``repr()`` escapes Windows backslashes, so compare against the
+    # escaped form on every platform (POSIX paths match unchanged).
+    assert repr(str(tmp_path / "manifest.jsonl")) in text
 
 
 def test_result_repr_includes_no_manifest_sentinel_when_none(tmp_path: Path) -> None:
@@ -773,6 +853,8 @@ def test_result_repr_preserves_existing_flags_ordering(tmp_path: Path) -> None:
     )
     text = repr(r)
     # The existing flags= list and trailing manifest_path should both
-    # still be present, in the documented order.
+    # still be present, in the documented order. Compare against the
+    # ``repr()``-escaped path so the assertion holds on Windows (where
+    # ``repr()`` turns backslashes into ``\\``).
     assert "flags=['no_results_found', 'cancelled']" in text
-    assert text.endswith("manifest_path='" + str(tmp_path / "m.jsonl") + "')")
+    assert text.endswith("manifest_path=" + repr(str(tmp_path / "m.jsonl")) + ")")

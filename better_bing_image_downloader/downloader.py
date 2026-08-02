@@ -382,6 +382,11 @@ class Downloader:
         self._manifest_writer = manifest_writer
         self._manifest_engine_name = engine
         self._manifest_query = query
+        # Per-search record counter (v3.x.y): the manifest ``index``
+        # field is 1-based and counts *every* record (success, error,
+        # or skip). It is reset here so a re-used ``Downloader``
+        # instance starts each search's indices at 1 again.
+        self._manifest_index = 0
 
         engine_kwargs: dict[str, object] = {}
         if engine == "bing":
@@ -686,15 +691,14 @@ class Downloader:
         if self._manifest_writer is None:
             return
         # ``index`` is 1-based and counts every record (success or
-        # failure). The engine's ``download_count`` is incremented
-        # inside ``download_image`` *after* ``save_image`` returns,
-        # so at the point we append to the manifest, the success
-        # path's count reflects this image and the failure path's
-        # count does not (the engine did not advance). We add 1 in
-        # the success path to make the index 1-based; the failure
-        # path's count is already the right 0-based position, but
-        # we also add 1 for consistency.
-        index = engine_obj.download_count + 1
+        # failure). We keep a per-search counter on the ``Downloader``
+        # instance (reset at the top of :meth:`search`) instead of
+        # deriving the index from the engine's internal
+        # ``download_count``: the engine only advances that counter on
+        # a successful save, so two consecutive error/skip records
+        # would otherwise share the same ``index`` value.
+        self._manifest_index += 1
+        index = self._manifest_index
         # Resolve file path relative to output_dir.
         file_rel: str | None = None
         if file_path is not None:
