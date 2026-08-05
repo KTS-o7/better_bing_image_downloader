@@ -382,10 +382,10 @@ class Downloader:
         self._manifest_writer = manifest_writer
         self._manifest_engine_name = engine
         self._manifest_query = query
-        # Per-search record counter (v3.x.y): the manifest ``index``
-        # field is 1-based and counts *every* record (success, error,
-        # or skip). It is reset here so a re-used ``Downloader``
-        # instance starts each search's indices at 1 again.
+        # Per-search record counter: the manifest ``index`` field is
+        # 1-based and counts *every* record (success, error, or skip).
+        # It is reset here so a re-used ``Downloader`` instance starts
+        # each search's indices at 1 again.
         self._manifest_index = 0
 
         engine_kwargs: dict[str, object] = {}
