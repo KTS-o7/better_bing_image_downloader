@@ -1,0 +1,102 @@
+# CodeRabbit configuration for better_bing_image_downloader.
+# Docs: https://docs.coderabbit.ai/guides/configure-coderabbit
+
+language: en-US
+tone_instructions: |
+  Be direct and technical. This is a small open-source library with a
+  single maintainer; prioritize correctness, backwards compatibility,
+  and stdlib-only constraints over style nitpicks.
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  poem: false
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+    ignore_title_keywords:
+      - WIP
+      - DO NOT REVIEW
+  path_filters:
+    - "!**/__pycache__/**"
+    - "!**/*.egg-info/**"
+    - "!docs/superpowers/**"
+  path_instructions:
+    - path: "better_bing_image_downloader/bing.py"
+      instructions: |
+        This module must stay pure-stdlib (urllib.request only). Flag any
+        use of `requests`, `httpx`, `aiohttp`, or new third-party imports.
+        Tests mock `urllib.request.urlopen` at the module-attribute
+        boundary; changes that break that boundary break the test suite.
+    - path: "better_bing_image_downloader/duckduckgo.py"
+      instructions: |
+        stdlib urllib only (brotli is the one allowed third-party
+        dependency, imported with a graceful fallback). Same urlopen
+        mock-boundary constraint as bing.py.
+    - path: "better_bing_image_downloader/base.py"
+      instructions: |
+        Shared engine base class. Changes here affect every engine.
+        Watch for: breaking the atomic-write/dedup/resume contract,
+        removing the `is_cancelled()` checks that keep run() loops
+        cancellable, and changing `save_image`'s public bool return
+        contract (the typed-exception variant is `_save_image_raising`).
+    - path: "better_bing_image_downloader/download.py"
+      instructions: |
+        Contains the legacy `downloader()` wrapper and the bbid CLI.
+        Signatures and return types here are public API — flag any
+        change to existing parameter defaults or the int return type.
+        New functionality should be additive (new params with defaults).
+    - path: "better_bing_image_downloader/downloader.py"
+      instructions: |
+        The v3.2.0+ `Downloader` entry point. Public signatures are
+        frozen; new behavior must come via new params with defaults or
+        new methods. Custom engines plug in via `Downloader.register()`
+        — do not suggest monkey-patching the registry.
+    - path: "better_bing_image_downloader/crawler.py"
+      instructions: |
+        DEPRECATED, scheduled for removal in v4.0.0. Do not suggest new
+        features or refactors here; only removal-blocking bug fixes matter.
+    - path: "better_bing_image_downloader/multidownloader.py"
+      instructions: |
+        DEPRECATED, scheduled for removal in v4.0.0. Selenium-based; do
+        not suggest extending it or adding Selenium back into the core.
+    - path: "better_bing_image_downloader/helperdownload.py"
+      instructions: |
+        DEPRECATED, used only by multidownloader. Do not suggest copying
+        its `requests`-based patterns into other modules.
+    - path: "better_bing_image_downloader/utils.py"
+      instructions: |
+        DEPRECATED config helpers. Do not suggest new features here.
+    - path: "better_bing_image_downloader/**"
+      instructions: |
+        Library-wide rules: use `logging`, never `print()` — flag any
+        `print()` call in library code as a real issue. Line length is
+        100 (black + ruff). Type hints required on public API. No new
+        top-level dependencies; optional extras are only `[duckduckgo]`
+        (brotli) and `[google]` (selenium).
+    - path: "tests/**"
+      instructions: |
+        pytest style preferred (test_bing.py is legacy unittest style —
+        do not ask to rewrite it). Patches must target the module that
+        uses the symbol, not the symbol's origin. Network tests must be
+        gated on the BBID_RUN_NETWORK_TESTS=1 environment variable.
+    - path: "pyproject.toml"
+      instructions: |
+        Version bumps follow SemVer (patch: fixes, minor: features,
+        major: breaking). Flag version bumps that don't match the
+        change's compatibility impact, and remind that CHANGELOG.md
+        needs a matching entry.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  issues:
+    scope: auto
+  learnings:
+    scope: auto
+  pull_requests:
+    scope: auto

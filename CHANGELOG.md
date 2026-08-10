@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Manifest records no longer collide on their `index` field when two
+  consecutive non-download records (errors, or `min_dimension`
+  skips) occur. The manifest `index` is now a strictly-increasing
+  per-search counter that counts every record (success, error, or
+  skip), matching the documented "1-based and counts every record"
+  schema. Previously, consecutive error/skip records shared the same
+  `index`, producing duplicate primary keys for downstream tooling.
+
+### Changed
+
+- Manifest writer state (writer, engine/query metadata, record
+  counter) is now invocation-local to each `Downloader.search()`
+  call instead of shared instance state, so nested or concurrent
+  searches on the same `Downloader` no longer clobber each other's
+  manifests. This is internal-only; the public API is unchanged.
+- Populated the previously-empty `docs/index.md` so the `docs/`
+  directory is no longer a confusing empty page. It now documents
+  that `docs/` holds internal design specs and points to the
+  `README.md` and `CONTRIBUTING.md` for user-facing documentation.
+
 ### Added
 
 - **HTTP/HTTPS proxy support.** `Downloader(proxy=...)`,
@@ -17,6 +39,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `urllib.request.urlopen` is still used, honouring
   `HTTP_PROXY`/`HTTPS_PROXY` env vars). SOCKS5 proxies are not yet
   supported.
+- Regression test (`tests/test_public_api.py`) asserting every name
+  in `better_bing_image_downloader.__all__` is importable from the
+  top-level package and resolves to the same object as its submodule
+  export. Prevents the v3.5.0→v3.5.1 re-export bug class.
+- Test coverage for the per-search manifest `index` counter, including
+  consecutive-error and mixed success/error/skip sequences.
+- Regression tests proving manifest state is invocation-local: a
+  nested `search()` fired from an `on_image` hook, and two threads
+  running `search()` concurrently on the same `Downloader`, each
+  keep independent writers, metadata, and 1-based counters.
+
+### Tests
+
+- Fixed two `Result.__repr__` tests in
+  `tests/test_v3_5_0_manifest.py` that failed on Windows because
+  `repr()` escapes backslash path separators. Assertions now compare
+  against the escaped (`repr()`) form of the path, which is
+  byte-exact on every platform.
 
 ## [3.7.1] - 2026-07-26
 

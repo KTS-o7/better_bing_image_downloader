@@ -491,6 +491,84 @@ def test_search_manifest_records_index_is_one_based_and_sequential(tmp_path: Pat
     assert indices == [1, 2, 3]
 
 
+def _make_png(width: int, height: int) -> bytes:
+    """Header-only PNG for dimension filtering (no real pixel data)."""
+    import struct
+
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    chunk = struct.pack(">I", len(ihdr_data)) + b"IHDR" + ihdr_data + b"\x00\x00\x00\x00"
+    return sig + chunk
+
+
+def test_search_manifest_consecutive_errors_get_unique_indices(tmp_path: Path) -> None:
+    """Two consecutive failures with no success between them must not share an index (#38)."""
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+
+    class TwoConsecutiveErrorsStub(ImageEngine):
+        def run(self) -> None:
+            self.download_image("https://x.test/a.png", 1)
+            self.download_image("https://x.test/b.png", 2)
+
+    dl.register("bad", TwoConsecutiveErrorsStub)
+
+    def failing_http_get(self, url, headers=None):
+        raise OSError("simulated network failure")
+
+    with patch.object(_base.ImageEngine, "_http_get", failing_http_get):
+        result = dl.search("q", limit=2, engine="bad", output_dir=tmp_path, manifest=True)
+
+    lines = Path(result.manifest_path).read_text(encoding="utf-8").splitlines()
+    indices = [json.loads(line)["index"] for line in lines]
+    assert indices == [1, 2]
+    assert len(set(indices)) == len(indices)
+
+
+def test_search_manifest_mixed_records_indices_strictly_increasing(tmp_path: Path) -> None:
+    """error + ok + min_dimension-skip records produce unique, sequential indices (#38)."""
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+
+    class MixedStub(ImageEngine):
+        def run(self) -> None:
+            # 1: error (broken bytes)
+            self.download_image("https://x.test/broken.jpg", 1)
+            # 2: ok (large image)
+            self.download_image("https://x.test/large.png", 2)
+            # 3: min_dimension skip (tiny image)
+            self.download_image("https://x.test/tiny.png", 3)
+
+    dl.register("mixed", MixedStub)
+
+    def fake_http_get(self, url, headers=None):
+        if "broken" in url:
+            return b"not an image"
+        if "tiny" in url:
+            return _make_png(10, 10)
+        return _make_png(800, 600)
+
+    with patch.object(_base.ImageEngine, "_http_get", fake_http_get):
+        result = dl.search(
+            "q",
+            limit=3,
+            engine="mixed",
+            output_dir=tmp_path,
+            manifest=True,
+            min_dimension=200,
+        )
+
+    lines = Path(result.manifest_path).read_text(encoding="utf-8").splitlines()
+    records = [json.loads(line) for line in lines]
+    statuses = [r["status"] for r in records]
+    indices = [r["index"] for r in records]
+    assert statuses == ["error", "ok", "skipped"]
+    assert indices == [1, 2, 3]
+    assert indices == sorted(set(indices))
+
+
 def test_search_manifest_records_have_utc_timestamp(tmp_path: Path) -> None:
     """downloaded_at is an ISO 8601 UTC string with a trailing 'Z'."""
     from better_bing_image_downloader import base as _base
@@ -542,6 +620,117 @@ def test_search_manifest_writer_closed_on_exception(tmp_path: Path) -> None:
     assert len(lines) == 1
     records = [json.loads(line) for line in lines]
     assert all(r["status"] == "ok" for r in records)
+
+
+# --- Group B2: invocation-local manifest state (nested/concurrent searches) ---
+
+
+def test_search_manifest_nested_search_from_on_image_hook(tmp_path: Path) -> None:
+    """An on_image hook that calls search() again must not clobber the outer manifest.
+
+    Both searches run on the SAME Downloader instance. The inner
+    search gets its own writer and 1-based counter; the outer
+    search's indices must still be [1, 2] with its own metadata.
+    """
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+    dl.register("stub", _make_two_ok_stub())
+
+    def fake_http_get(self, url, headers=None):
+        return b"\xff\xd8\xff\xe0" + url.encode("utf-8")
+
+    outer_dir = tmp_path / "outer"
+    inner_dir = tmp_path / "inner"
+    inner_results: list = []
+
+    nesting = {"active": False}
+
+    def on_image_nested(ir) -> None:
+        # Fire a nested search from inside the outer search's hook.
+        # The guard prevents infinite recursion: the hook is
+        # instance-wide, so the inner search's own on_image events
+        # would re-trigger it otherwise.
+        if nesting["active"] or inner_results:
+            return
+        nesting["active"] = True
+        try:
+            inner_results.append(
+                dl.search("dog", limit=2, engine="stub", output_dir=inner_dir, manifest=True)
+            )
+        finally:
+            nesting["active"] = False
+
+    dl.on_image = on_image_nested
+
+    with patch.object(_base.ImageEngine, "_http_get", fake_http_get):
+        outer = dl.search("cat", limit=2, engine="stub", output_dir=outer_dir, manifest=True)
+
+    assert len(inner_results) == 1
+    inner = inner_results[0]
+
+    outer_records = [
+        json.loads(line)
+        for line in Path(outer.manifest_path).read_text(encoding="utf-8").splitlines()
+    ]
+    inner_records = [
+        json.loads(line)
+        for line in Path(inner.manifest_path).read_text(encoding="utf-8").splitlines()
+    ]
+
+    # Outer search: indices still strictly 1-based despite the nested
+    # search running in the middle of it.
+    assert [r["index"] for r in outer_records] == [1, 2]
+    assert all(r["query"] == "cat" for r in outer_records)
+    # Inner search: its own writer and counter, starting at 1.
+    assert [r["index"] for r in inner_records] == [1, 2]
+    assert all(r["query"] == "dog" for r in inner_records)
+
+
+def test_search_manifest_concurrent_searches_same_downloader(tmp_path: Path) -> None:
+    """Two threads running search() on the same Downloader keep separate manifests.
+
+    Each thread writes to its own output dir; indices must be
+    strictly increasing starting at 1 in each manifest, and no
+    records may leak between the two (each manifest contains only
+    its own query/engine records).
+    """
+    import threading
+
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+    dl.register("stub", _make_two_ok_stub())
+
+    def fake_http_get(self, url, headers=None):
+        return b"\xff\xd8\xff\xe0" + url.encode("utf-8")
+
+    results: dict[str, object] = {}
+
+    def run_search(query: str, out_dir: Path) -> None:
+        results[query] = dl.search(query, limit=2, engine="stub", output_dir=out_dir, manifest=True)
+
+    with patch.object(_base.ImageEngine, "_http_get", fake_http_get):
+        threads = [
+            threading.Thread(target=run_search, args=("cat", tmp_path / "a")),
+            threading.Thread(target=run_search, args=("dog", tmp_path / "b")),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert set(results.keys()) == {"cat", "dog"}
+    for query in ("cat", "dog"):
+        result = results[query]
+        records = [
+            json.loads(line)
+            for line in Path(result.manifest_path).read_text(encoding="utf-8").splitlines()
+        ]
+        assert [r["index"] for r in records] == [1, 2]
+        # No cross-contamination between the two manifests.
+        assert all(r["query"] == query for r in records)
+        assert all(r["engine"] == "stub" for r in records)
 
 
 # --- Group C: Result + CLI integration (4 tests) ---
@@ -742,7 +931,9 @@ def test_result_repr_includes_manifest_path_when_set(tmp_path: Path) -> None:
     text = repr(r)
     assert "manifest.jsonl" in text
     assert "manifest_path" in text
-    assert str(tmp_path / "manifest.jsonl") in text
+    # ``repr()`` escapes Windows backslashes, so compare against the
+    # escaped form on every platform (POSIX paths match unchanged).
+    assert repr(str(tmp_path / "manifest.jsonl")) in text
 
 
 def test_result_repr_includes_no_manifest_sentinel_when_none(tmp_path: Path) -> None:
@@ -773,6 +964,8 @@ def test_result_repr_preserves_existing_flags_ordering(tmp_path: Path) -> None:
     )
     text = repr(r)
     # The existing flags= list and trailing manifest_path should both
-    # still be present, in the documented order.
+    # still be present, in the documented order. Compare against the
+    # ``repr()``-escaped path so the assertion holds on Windows (where
+    # ``repr()`` turns backslashes into ``\\``).
     assert "flags=['no_results_found', 'cancelled']" in text
-    assert text.endswith("manifest_path='" + str(tmp_path / "m.jsonl") + "')")
+    assert text.endswith("manifest_path=" + repr(str(tmp_path / "m.jsonl")) + ")")
