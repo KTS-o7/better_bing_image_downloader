@@ -74,6 +74,7 @@ class Bing(ImageEngine):
         mkt: str = "en-US",
         cancel=None,
         min_dimension: int | None = None,
+        proxy: str | None = None,
     ):
         super().__init__(
             query=query,
@@ -87,6 +88,7 @@ class Bing(ImageEngine):
             force_replace=force_replace,
             cancel=cancel,
             min_dimension=min_dimension,
+            proxy=proxy,
         )
         self.adult = adult
         self.filter = filter
@@ -153,9 +155,15 @@ class Bing(ImageEngine):
         """
         request_url = self._build_page_url(page_counter)
         request = urllib.request.Request(request_url, None, headers=self.headers)
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
-            raw: bytes = response.read()
-            content_encoding = response.headers.get("Content-Encoding", "")
+        raw: bytes
+        if self.proxy:
+            with self.opener.open(request, timeout=self.timeout) as response:
+                raw = response.read()
+                content_encoding = response.headers.get("Content-Encoding", "")
+        else:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                raw = response.read()
+                content_encoding = response.headers.get("Content-Encoding", "")
         if content_encoding == "gzip":
             decompressed: bytes = gzip.decompress(raw)
             return decompressed.decode("utf8")

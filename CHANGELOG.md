@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **HTTP/HTTPS proxy support.** `Downloader(proxy=...)`,
+  `downloader(proxy=...)` and the `bbid --proxy` CLI flag now route
+  every request (search page fetches and image downloads) through a
+  configured HTTP/HTTPS proxy via `urllib.request.ProxyHandler`.
+  With no proxy configured, behaviour is unchanged (module-level
+  `urllib.request.urlopen` is still used, honouring
+  `HTTP_PROXY`/`HTTPS_PROXY` env vars). SOCKS5 proxies are not yet
+  supported.
 - Regression test (`tests/test_public_api.py`) asserting every name
   in `better_bing_image_downloader.__all__` is importable from the
   top-level package and resolves to the same object as its submodule
