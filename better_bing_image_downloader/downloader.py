@@ -209,13 +209,11 @@ class Downloader:
         self._registry: dict[str, type[ImageEngine]] = dict(self._DEFAULT_REGISTRY)
         self._registry_lock = threading.Lock()
 
-        # --- Manifest writer (v3.5.0+). Set by ``search()``; ``None``
-        # means no manifest is being written. The success/error hooks
-        # inside ``search()`` read this attribute to decide whether to
-        # append records.
-        self._manifest_writer: ManifestWriter | None = None
-        self._manifest_engine_name: str | None = None
-        self._manifest_query: str | None = None
+        # Manifest state (v3.5.0+) is deliberately NOT kept on the
+        # instance: each ``search()`` call builds its own invocation-
+        # local :class:`_ManifestContext` so nested or concurrent
+        # searches on the same ``Downloader`` never clobber each
+        # other's writer, metadata, or record counter.
 
     # --- Engine registry ---
 
@@ -363,9 +361,11 @@ class Downloader:
         # Constructed here so it is open and ready to receive
         # records from the very first image attempt. Wrapped in
         # try/finally below to guarantee ``close()`` is called
-        # even on exception. ``self._manifest_writer`` is also
-        # set on the instance so the success/error hooks inside
-        # ``_run_engine`` can append records to it.
+        # even on exception. The writer and its metadata live in an
+        # invocation-local :class:`_ManifestContext` (not on ``self``)
+        # so nested ``search()`` calls from hooks, or concurrent
+        # searches on the same ``Downloader``, each get their own
+        # writer and 1-based record counter.
         manifest_writer: ManifestWriter | None = None
         manifest_abs_path: str | None = None
         if manifest:
@@ -378,10 +378,13 @@ class Downloader:
                 flush_every=manifest_flush_every,
             )
             manifest_abs_path = str(resolved_manifest_path.resolve())
-        # Expose to the success/error hooks below.
-        self._manifest_writer = manifest_writer
-        self._manifest_engine_name = engine
-        self._manifest_query = query
+        # Invocation-local manifest context, closed over by the
+        # success/error/skip hooks below.
+        manifest_ctx: _ManifestContext | None = (
+            _ManifestContext(manifest_writer, engine, query)
+            if manifest_writer is not None
+            else None
+        )
 
         engine_kwargs: dict[str, object] = {}
         if engine == "bing":
@@ -495,8 +498,9 @@ class Downloader:
                 # into Result.errors or fire on_error. It's recorded
                 # as a manifest "skip" and counted in Result.skipped.
                 min_dimension_skips += 1
-                if self._manifest_writer is not None:
-                    self._append_manifest_record(
+                if manifest_ctx is not None:
+                    _append_manifest_record(
+                        manifest_ctx,
                         status="skipped",
                         url=link,
                         file_path=None,
@@ -515,8 +519,9 @@ class Downloader:
                     except Exception:
                         logging.exception("on_error hook raised; continuing")
                 # Manifest append (v3.5.0+): record the typed failure.
-                if self._manifest_writer is not None:
-                    self._append_manifest_record(
+                if manifest_ctx is not None:
+                    _append_manifest_record(
+                        manifest_ctx,
                         status="error",
                         url=link,
                         file_path=None,
@@ -535,8 +540,9 @@ class Downloader:
                     except Exception:
                         logging.exception("on_error hook raised; continuing")
                 # Manifest append (v3.5.0+): record the unhandled failure.
-                if self._manifest_writer is not None:
-                    self._append_manifest_record(
+                if manifest_ctx is not None:
+                    _append_manifest_record(
+                        manifest_ctx,
                         status="error",
                         url=link,
                         file_path=None,
@@ -585,8 +591,9 @@ class Downloader:
                 except Exception:
                     logging.exception("on_progress hook raised; continuing")
             # Manifest append (v3.5.0+): one record per successful save.
-            if self._manifest_writer is not None:
-                self._append_manifest_record(
+            if manifest_ctx is not None:
+                _append_manifest_record(
+                    manifest_ctx,
                     status="ok",
                     url=link,
                     file_path=fp,
@@ -661,61 +668,6 @@ class Downloader:
                 logging.exception("on_engine_done hook raised; continuing")
 
         return result
-
-    def _append_manifest_record(
-        self,
-        status: str,
-        url: str,
-        file_path: Path | None,
-        md5: str | None,
-        error: BaseException | None,
-        engine_obj: ImageEngine,
-    ) -> None:
-        """Build a manifest record dict and append it to the writer.
-
-        Called from the success and error paths inside :meth:`search`
-        when ``manifest=True`` was passed. The record is filtered to
-        the writer's configured fields automatically.
-
-        ``file_path`` is stored relative to ``output_dir`` (i.e. as
-        ``"<query>/Image_1.jpg"``) so the manifest is portable
-        across machines. If the relative-to conversion fails (e.g.
-        the engine wrote outside ``output_dir``), the basename is
-        used as a fallback.
-        """
-        if self._manifest_writer is None:
-            return
-        # ``index`` is 1-based and counts every record (success or
-        # failure). The engine's ``download_count`` is incremented
-        # inside ``download_image`` *after* ``save_image`` returns,
-        # so at the point we append to the manifest, the success
-        # path's count reflects this image and the failure path's
-        # count does not (the engine did not advance). We add 1 in
-        # the success path to make the index 1-based; the failure
-        # path's count is already the right 0-based position, but
-        # we also add 1 for consistency.
-        index = engine_obj.download_count + 1
-        # Resolve file path relative to output_dir.
-        file_rel: str | None = None
-        if file_path is not None:
-            try:
-                file_rel = str(file_path.resolve().relative_to(Path.cwd()))
-            except ValueError:
-                file_rel = file_path.name
-        self._manifest_writer.append(
-            {
-                "index": index,
-                "status": status,
-                "url": url,
-                "file": file_rel,
-                "md5": md5,
-                "error": type(error).__name__ if error is not None else None,
-                "engine": self._manifest_engine_name,
-                "query": self._manifest_query,
-                "source_page": getattr(engine_obj, "last_page_url", None),
-                "downloaded_at": _utcnow_iso(),
-            }
-        )
 
     async def search_async(
         self,
@@ -804,6 +756,81 @@ def _utcnow_iso() -> str:
     ``downloaded_at`` field. Format: ``YYYY-MM-DDTHH:MM:SSZ``.
     """
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class _ManifestContext:
+    """Invocation-local manifest state for a single ``search()`` call.
+
+    Holds the writer, the engine/query provenance metadata, and the
+    1-based record counter. A fresh instance is created at the top of
+    every ``search()`` call and closed over by the success/error/skip
+    hooks — it is deliberately NOT stored on the ``Downloader``
+    instance, so a nested ``search()`` fired from an ``on_image``
+    hook, or two threads running ``search()`` concurrently on the
+    same ``Downloader``, each get independent writers and counters.
+    """
+
+    __slots__ = ("writer", "engine_name", "query", "index")
+
+    def __init__(self, writer: ManifestWriter, engine_name: str, query: str) -> None:
+        self.writer = writer
+        self.engine_name = engine_name
+        self.query = query
+        # 1-based record counter, incremented by
+        # ``_append_manifest_record`` on every record.
+        self.index = 0
+
+
+def _append_manifest_record(
+    manifest_ctx: _ManifestContext,
+    status: str,
+    url: str,
+    file_path: Path | None,
+    md5: str | None,
+    error: BaseException | None,
+    engine_obj: ImageEngine,
+) -> None:
+    """Build a manifest record dict and append it to the context's writer.
+
+    Called from the success and error paths inside ``Downloader.search``
+    when ``manifest=True`` was passed. The record is filtered to
+    the writer's configured fields automatically.
+
+    ``file_path`` is stored relative to ``output_dir`` (i.e. as
+    ``"<query>/Image_1.jpg"``) so the manifest is portable
+    across machines. If the relative-to conversion fails (e.g.
+    the engine wrote outside ``output_dir``), the basename is
+    used as a fallback.
+    """
+    # ``index`` is 1-based and counts every record (success or
+    # failure). We keep a per-search counter on the invocation-local
+    # context instead of deriving the index from the engine's internal
+    # ``download_count``: the engine only advances that counter on
+    # a successful save, so two consecutive error/skip records
+    # would otherwise share the same ``index`` value.
+    manifest_ctx.index += 1
+    index = manifest_ctx.index
+    # Resolve file path relative to output_dir.
+    file_rel: str | None = None
+    if file_path is not None:
+        try:
+            file_rel = str(file_path.resolve().relative_to(Path.cwd()))
+        except ValueError:
+            file_rel = file_path.name
+    manifest_ctx.writer.append(
+        {
+            "index": index,
+            "status": status,
+            "url": url,
+            "file": file_rel,
+            "md5": md5,
+            "error": type(error).__name__ if error is not None else None,
+            "engine": manifest_ctx.engine_name,
+            "query": manifest_ctx.query,
+            "source_page": getattr(engine_obj, "last_page_url", None),
+            "downloaded_at": _utcnow_iso(),
+        }
+    )
 
 
 def _compute_eta(state: dict[str, float | int], done: int, total: int) -> float | None:
