@@ -622,6 +622,117 @@ def test_search_manifest_writer_closed_on_exception(tmp_path: Path) -> None:
     assert all(r["status"] == "ok" for r in records)
 
 
+# --- Group B2: invocation-local manifest state (nested/concurrent searches) ---
+
+
+def test_search_manifest_nested_search_from_on_image_hook(tmp_path: Path) -> None:
+    """An on_image hook that calls search() again must not clobber the outer manifest.
+
+    Both searches run on the SAME Downloader instance. The inner
+    search gets its own writer and 1-based counter; the outer
+    search's indices must still be [1, 2] with its own metadata.
+    """
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+    dl.register("stub", _make_two_ok_stub())
+
+    def fake_http_get(self, url, headers=None):
+        return b"\xff\xd8\xff\xe0" + url.encode("utf-8")
+
+    outer_dir = tmp_path / "outer"
+    inner_dir = tmp_path / "inner"
+    inner_results: list = []
+
+    nesting = {"active": False}
+
+    def on_image_nested(ir) -> None:
+        # Fire a nested search from inside the outer search's hook.
+        # The guard prevents infinite recursion: the hook is
+        # instance-wide, so the inner search's own on_image events
+        # would re-trigger it otherwise.
+        if nesting["active"] or inner_results:
+            return
+        nesting["active"] = True
+        try:
+            inner_results.append(
+                dl.search("dog", limit=2, engine="stub", output_dir=inner_dir, manifest=True)
+            )
+        finally:
+            nesting["active"] = False
+
+    dl.on_image = on_image_nested
+
+    with patch.object(_base.ImageEngine, "_http_get", fake_http_get):
+        outer = dl.search("cat", limit=2, engine="stub", output_dir=outer_dir, manifest=True)
+
+    assert len(inner_results) == 1
+    inner = inner_results[0]
+
+    outer_records = [
+        json.loads(line)
+        for line in Path(outer.manifest_path).read_text(encoding="utf-8").splitlines()
+    ]
+    inner_records = [
+        json.loads(line)
+        for line in Path(inner.manifest_path).read_text(encoding="utf-8").splitlines()
+    ]
+
+    # Outer search: indices still strictly 1-based despite the nested
+    # search running in the middle of it.
+    assert [r["index"] for r in outer_records] == [1, 2]
+    assert all(r["query"] == "cat" for r in outer_records)
+    # Inner search: its own writer and counter, starting at 1.
+    assert [r["index"] for r in inner_records] == [1, 2]
+    assert all(r["query"] == "dog" for r in inner_records)
+
+
+def test_search_manifest_concurrent_searches_same_downloader(tmp_path: Path) -> None:
+    """Two threads running search() on the same Downloader keep separate manifests.
+
+    Each thread writes to its own output dir; indices must be
+    strictly increasing starting at 1 in each manifest, and no
+    records may leak between the two (each manifest contains only
+    its own query/engine records).
+    """
+    import threading
+
+    from better_bing_image_downloader import base as _base
+
+    dl = Downloader()
+    dl.register("stub", _make_two_ok_stub())
+
+    def fake_http_get(self, url, headers=None):
+        return b"\xff\xd8\xff\xe0" + url.encode("utf-8")
+
+    results: dict[str, object] = {}
+
+    def run_search(query: str, out_dir: Path) -> None:
+        results[query] = dl.search(query, limit=2, engine="stub", output_dir=out_dir, manifest=True)
+
+    with patch.object(_base.ImageEngine, "_http_get", fake_http_get):
+        threads = [
+            threading.Thread(target=run_search, args=("cat", tmp_path / "a")),
+            threading.Thread(target=run_search, args=("dog", tmp_path / "b")),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    assert set(results.keys()) == {"cat", "dog"}
+    for query in ("cat", "dog"):
+        result = results[query]
+        records = [
+            json.loads(line)
+            for line in Path(result.manifest_path).read_text(encoding="utf-8").splitlines()
+        ]
+        assert [r["index"] for r in records] == [1, 2]
+        # No cross-contamination between the two manifests.
+        assert all(r["query"] == query for r in records)
+        assert all(r["engine"] == "stub" for r in records)
+
+
 # --- Group C: Result + CLI integration (4 tests) ---
 
 

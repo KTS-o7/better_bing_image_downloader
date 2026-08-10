@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Manifest writer state (writer, engine/query metadata, record
+  counter) is now invocation-local to each `Downloader.search()`
+  call instead of shared instance state, so nested or concurrent
+  searches on the same `Downloader` no longer clobber each other's
+  manifests. This is internal-only; the public API is unchanged.
 - Populated the previously-empty `docs/index.md` so the `docs/`
   directory is no longer a confusing empty page. It now documents
   that `docs/` holds internal design specs and points to the
@@ -32,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   export. Prevents the v3.5.0→v3.5.1 re-export bug class.
 - Test coverage for the per-search manifest `index` counter, including
   consecutive-error and mixed success/error/skip sequences.
+- Regression tests proving manifest state is invocation-local: a
+  nested `search()` fired from an `on_image` hook, and two threads
+  running `search()` concurrently on the same `Downloader`, each
+  keep independent writers, metadata, and 1-based counters.
 
 ### Tests
 
