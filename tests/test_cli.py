@@ -1,5 +1,7 @@
 """CLI smoke tests for the ``bbid`` entry point."""
 
+from __future__ import annotations
+
 import subprocess
 import sys
 from importlib.metadata import PackageNotFoundError
