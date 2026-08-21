@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `crawler`, `helperdownload`, and `utils` now emit a
+  `DeprecationWarning` at import time, matching the existing runtime
+  warning in `multidownloader.main()`. All four modules are still
+  scheduled for removal in v4.0.0.
+- CLI smoke tests for `bbid --version` (`tests/test_cli.py`), covering
+  both in-process invocation and a real subprocess.
+- A "Thread safety" section in the `Downloader` docstring documenting
+  the concurrency contract: instances are safe to share across threads
+  only with `manifest=False`; `CancelToken` is thread-safe.
+
+### Changed
+
+- Refreshed the README Features list, which still described the v3.0.x
+  surface: it now covers the embeddable `Downloader` API, JSONL
+  manifest export, `min_dimension`, proxy support, and `CancelToken`,
+  and no longer advertises the legacy `_manifest.json` as the download
+  manifest. Quick Start now leads with the `Downloader` API, and the
+  legacy `_manifest.json` section is explicitly labelled as such.
+
 ## [3.8.0] - 2026-08-10
 
 ### Fixed
