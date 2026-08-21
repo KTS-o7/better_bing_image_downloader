@@ -351,7 +351,9 @@ Each line is a self-contained JSON object:
 Status values are `"ok"`, `"error"`, or `"skipped"`. The
 `source_page` field is the URL of the search-results page the
 image came from. Failed downloads record the typed exception
-class name in `error` (e.g. `"NetworkError"`).
+class name in `error` (e.g. `"NetworkError"`). The record format
+is described by [`docs/manifest.schema.json`](docs/manifest.schema.json)
+(JSON Schema Draft 2020-12).
 
 The manifest is line-buffered and flushed after every record by
 default, so a partial run leaves a valid (partial) file. Use
