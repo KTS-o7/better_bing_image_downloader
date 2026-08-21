@@ -76,7 +76,7 @@ class _FakeHttpResponse:
     def read(self) -> bytes:
         return self._body
 
-    def __enter__(self) -> "_FakeHttpResponse":
+    def __enter__(self) -> _FakeHttpResponse:
         return self
 
     def __exit__(self, *exc) -> bool:
@@ -127,7 +127,9 @@ def test_cli_manifest_writes_default_jsonl(monkeypatch, tmp_path) -> None:
         assert record["status"] == "ok"
         assert record["engine"] == "bing"
         assert record["query"] == "red panda"
-    assert [r["index"] for r in records] == [1, 2]
+    # Downloads run in parallel, so records may be appended out of
+    # order; the indices themselves are strictly unique per search.
+    assert sorted(r["index"] for r in records) == [1, 2]
 
 
 def test_cli_manifest_path_override(monkeypatch, tmp_path) -> None:
