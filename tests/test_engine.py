@@ -132,3 +132,25 @@ class TestMultidownloaderDeprecated:
         from better_bing_image_downloader import crawler
 
         assert "deprecated" in crawler.__doc__.lower()
+
+
+class TestDeprecatedModulesWarnOnImport:
+    """``crawler``, ``helperdownload``, and ``utils`` must emit a
+    ``DeprecationWarning`` at import time (removed in v4.0.0)."""
+
+    def _assert_warns_on_reload(self, module_name: str) -> None:
+        import importlib
+
+        module = importlib.import_module(module_name)
+        with pytest.warns(DeprecationWarning, match=module_name.rsplit(".", 1)[-1]):
+            importlib.reload(module)
+
+    def test_crawler_import_emits_deprecation_warning(self):
+        pytest.importorskip("selenium")
+        self._assert_warns_on_reload("better_bing_image_downloader.crawler")
+
+    def test_helperdownload_import_emits_deprecation_warning(self):
+        self._assert_warns_on_reload("better_bing_image_downloader.helperdownload")
+
+    def test_utils_import_emits_deprecation_warning(self):
+        self._assert_warns_on_reload("better_bing_image_downloader.utils")

@@ -21,6 +21,7 @@ import logging
 import re
 import shutil
 import time
+import warnings
 from urllib.parse import quote
 
 import requests
@@ -29,6 +30,14 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+
+warnings.warn(
+    "better_bing_image_downloader.crawler is deprecated and will be removed "
+    "in v4.0.0. Use better_bing_image_downloader.Downloader with "
+    'engine="bing" or engine="duckduckgo" instead.',
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # Default headers for HTTP requests
 g_headers = {
