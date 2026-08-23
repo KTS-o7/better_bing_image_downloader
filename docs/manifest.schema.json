@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/KTS-o7/better_bing_image_downloader/main/docs/manifest.schema.json",
+  "title": "better-bing-image-downloader manifest record",
+  "description": "One line of a manifest.jsonl file written by Downloader.search(manifest=True) (v3.5.0+). This schema describes a full record written with the default 10-field set (DEFAULT_MANIFEST_FIELDS). When a custom manifest_fields list is configured, each record is a projection of this schema containing only the requested fields.",
+  "type": "object",
+  "required": [
+    "index",
+    "status",
+    "url",
+    "file",
+    "md5",
+    "error",
+    "engine",
+    "query",
+    "source_page",
+    "downloaded_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "index": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-based per-search counter. Counts every record (ok, error, or skipped); strictly increasing within one search."
+    },
+    "status": {
+      "enum": ["ok", "error", "skipped"],
+      "description": "'ok' = image saved; 'error' = download/validation failed; 'skipped' = filtered out (e.g. below min_dimension, v3.6.0+)."
+    },
+    "url": {
+      "type": "string",
+      "description": "Source image URL."
+    },
+    "file": {
+      "type": ["string", "null"],
+      "description": "Saved file path relative to the working directory (e.g. 'dataset/cats/Image_1.jpg'). Null when nothing was saved (error/skipped records)."
+    },
+    "md5": {
+      "type": ["string", "null"],
+      "description": "MD5 hex digest of the saved file. Null when nothing was saved."
+    },
+    "error": {
+      "type": ["string", "null"],
+      "description": "Exception class name on failure or skip (e.g. 'NetworkError', 'BelowMinDimension'). Null on success."
+    },
+    "engine": {
+      "type": "string",
+      "description": "Engine name, e.g. 'bing' or 'duckduckgo'."
+    },
+    "query": {
+      "type": "string",
+      "description": "The search query that produced this record."
+    },
+    "source_page": {
+      "type": ["string", "null"],
+      "description": "URL of the search-result page the image link was found on."
+    },
+    "downloaded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp, e.g. '2026-06-13T10:20:30Z'."
+    }
+  }
+}

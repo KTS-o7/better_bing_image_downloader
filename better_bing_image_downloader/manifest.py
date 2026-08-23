@@ -19,6 +19,10 @@ Public surface:
 - :class:`ManifestWriter` — the writer
 - :class:`ManifestFieldError` — raised when an unknown field is requested
 - :data:`DEFAULT_MANIFEST_FIELDS` — the default 10-field set
+
+The on-disk record format is the public contract; it is described by
+``docs/manifest.schema.json`` (JSON Schema Draft 2020-12) in the
+repository.
 """
 
 from __future__ import annotations

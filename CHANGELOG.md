@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scheduled for removal in v4.0.0.
 - CLI smoke tests for `bbid --version` (`tests/test_cli.py`), covering
   both in-process invocation and a real subprocess.
+- CLI smoke tests for the v3.5.0 manifest flags (`--manifest`,
+  `--manifest-path`, `--manifest-fields`, `--manifest-flush-every`),
+  exercising the argparse-to-`downloader()` wiring end-to-end with the
+  network stubbed.
+- `docs/manifest.schema.json`: a JSON Schema (Draft 2020-12)
+  describing the `manifest.jsonl` record format, referenced from the
+  README and the `manifest.py` docstring.
+  `tests/test_manifest_schema.py` validates real writer output against
+  the schema so the two cannot silently drift apart. `jsonschema` was
+  added to the dev dependencies (test-only; not a runtime dep).
 - A "Thread safety" section in the `Downloader` docstring documenting
   the concurrency contract: instances are safe to share across threads
   only with `manifest=False`; `CancelToken` is thread-safe.
