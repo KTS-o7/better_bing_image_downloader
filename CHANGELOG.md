@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Deprecated
+
+- The legacy `_manifest.json` file written by `downloader()` now emits
+  a `DeprecationWarning` and will be removed in v4.0.0. The file is
+  still written during the deprecation period. Migrate to the JSONL
+  `manifest.jsonl` export (`manifest=True`).
+
 ### Added
 
 - `crawler`, `helperdownload`, and `utils` now emit a
