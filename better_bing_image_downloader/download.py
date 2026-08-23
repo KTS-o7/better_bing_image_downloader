@@ -204,7 +204,21 @@ def downloader(
 
 
 def _write_legacy_manifest(image_dir: Path, result) -> None:
-    """Write the v3.1.x-style _manifest.json. Best-effort, never raises."""
+    """Write the v3.1.x-style _manifest.json. Best-effort, never raises.
+
+    .. deprecated:: 3.8.1
+        The ``_manifest.json`` file is deprecated and will be removed in
+        v4.0.0. Use the JSONL ``manifest.jsonl`` export instead
+        (``manifest=True``).
+    """
+    warnings.warn(
+        "The _manifest.json file written by downloader() is deprecated and "
+        "will be removed in v4.0.0. Use the JSONL manifest instead: "
+        "downloader(..., manifest=True) or "
+        "Downloader().search(..., manifest=True).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     try:
         existing: dict = {}
         manifest_path = image_dir / "_manifest.json"

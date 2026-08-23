@@ -136,3 +136,28 @@ def test_downloader_old_filter_param_works_with_deprecation_warning():
             downloader("cats", limit=1, output_dir=tmp, filter="photo")
         assert any(issubclass(x.category, DeprecationWarning) for x in w)
         assert any("image_filter" in str(x.message) for x in w)
+
+
+def test_legacy_manifest_write_emits_deprecation_warning():
+    """_manifest.json is deprecated (v3.8.1): warn, but still write the file."""
+    import warnings
+
+    tmp = tempfile.mkdtemp()
+    mock_cls = _build_mock_engine_cls(0)
+    with patch.object(
+        Downloader,
+        "_DEFAULT_REGISTRY",
+        {"bing": mock_cls, "duckduckgo": mock_cls},
+    ):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            downloader("cats", limit=1, output_dir=tmp)
+        manifest_warnings = [
+            x
+            for x in w
+            if issubclass(x.category, DeprecationWarning) and "_manifest.json" in str(x.message)
+        ]
+        assert manifest_warnings, "expected a DeprecationWarning about _manifest.json"
+        assert "v4.0.0" in str(manifest_warnings[0].message)
+    # The file is still written during the deprecation period.
+    assert os.path.exists(os.path.join(tmp, "cats", "_manifest.json"))

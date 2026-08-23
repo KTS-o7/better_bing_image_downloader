@@ -420,7 +420,11 @@ downloader("cats", limit=150, output_dir="dataset")
 downloader("cats", limit=150, output_dir="dataset", engine="duckduckgo")
 ```
 
-### Download manifest (legacy)
+### Download manifest (legacy, deprecated)
+
+> **Deprecated:** `_manifest.json` is deprecated since v3.8.1 and will be
+> removed in v4.0.0. Use the JSONL `manifest.jsonl` export
+> (`manifest=True`, see above) for all new tooling.
 
 The legacy `downloader()` function also writes a `_manifest.json` file to the
 output directory after every run — a v3.1.x format kept for backwards
