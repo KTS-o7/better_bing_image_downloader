@@ -1,6 +1,11 @@
 """Download images by URL list with automatic renaming.
 
 Used by the optional Selenium-based ``multidownloader`` path.
+
+.. deprecated::
+    This module will be removed in v4.0.0 together with
+    ``multidownloader``. Use :class:`better_bing_image_downloader.Downloader`
+    instead.
 """
 
 from __future__ import annotations
@@ -11,11 +16,19 @@ import os
 import shutil
 import tempfile
 import time
+import warnings
 
 import filetype
 import requests
 
 from .base import MAX_FUTURE_TIMEOUT, VALID_IMAGE_EXTENSIONS
+
+warnings.warn(
+    "better_bing_image_downloader.helperdownload is deprecated and will be "
+    "removed in v4.0.0. Use better_bing_image_downloader.Downloader instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 __all__ = ["VALID_IMAGE_EXTENSIONS", "download_image", "download_images"]
 

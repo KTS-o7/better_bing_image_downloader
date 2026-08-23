@@ -163,6 +163,23 @@ class Downloader:
         requests behave exactly as before and honour the standard
         ``HTTP_PROXY``/``HTTPS_PROXY`` environment variables.
 
+    Thread safety
+    -------------
+    A ``Downloader`` instance may be shared across threads **only when
+    every ``search()`` call uses ``manifest=False``** (the default):
+    after construction, ``search()`` is read-only with respect to the
+    engine registry and the cookie jar is only used through per-request
+    opener state.
+
+    When ``manifest=True`` the instance is **not safe to share across
+    threads** — the underlying ``ManifestWriter`` is single-threaded,
+    and concurrent ``search(manifest=True)`` calls on the same instance
+    can interleave or corrupt ``manifest.jsonl`` records. Use one
+    ``Downloader`` per thread in that case.
+
+    ``CancelToken`` is thread-safe and can be shared freely: call
+    ``cancel()`` from any thread to abort a running ``search()``.
+
     Examples
     --------
     Minimal one-liner:

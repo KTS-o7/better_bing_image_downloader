@@ -1,6 +1,16 @@
 # author: Krishnatejaswi S
 # Email: shentharkrishnatejaswi@gmail.com
 
+import warnings
+
+warnings.warn(
+    "better_bing_image_downloader.utils is deprecated and will be removed "
+    "in v4.0.0. It is only used by the deprecated multidownloader path; "
+    "use better_bing_image_downloader.Downloader instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 
 def gen_valid_dir_name_for_keywords(keywords):
     keep = ["-", "_", "."]

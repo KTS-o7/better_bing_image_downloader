@@ -10,16 +10,19 @@ A fast, reliable Python library and CLI tool for bulk downloading images from Bi
 
 ## Features
 
+- **Embeddable `Downloader` API** — search programmatically with `Result` / `ImageResult` value objects, lifecycle hooks (`on_image`, `on_error`, `on_progress`, `on_engine_start`, `on_engine_done`), and `search_async` for asyncio code
 - **Two search engines, one API** — Bing (default) or DuckDuckGo, switched via a single `engine=` parameter
+- **JSONL manifest export** (`manifest=True`) — one record per download attempt, crash-safe, downstream-auditable
+- **`min_dimension` filter** — skip images smaller than N pixels on either side, useful for ML training data prep
+- **HTTP/HTTPS proxy support** — route all traffic through a proxy with a single `proxy=` parameter
+- **Cancel mid-run** via `CancelToken` — abort a `search()` cleanly without leaving partial state
 - **No browser required** — both engines use plain HTTP/JSON (no Selenium, no headless Chrome)
 - **Parallel downloading** with configurable worker threads (atomic writes, no partial files)
 - **Resume support** — re-running skips already-downloaded files and fills the gap
-- **Download manifest** — `_manifest.json` written per run mapping filenames to source URLs
 - **Image deduplication** — MD5 hash check prevents saving the same image twice from different URLs
 - **Image type validation** — `filetype` library rejects non-image responses
 - **Filtering** by image type (photo, clipart, line drawing, animated gif, transparent) on Bing
-- **Adult content filter** control
-- **Bad sites exclusion** list
+- **Adult content filter** control, **bad sites** exclusion list
 - **`bbid` CLI command** installed automatically with the package
 - **Exponential backoff** on network errors with per-page retry
 - Requires Python 3.8+
@@ -65,16 +68,19 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```python
-from better_bing_image_downloader import downloader
+from better_bing_image_downloader import Downloader
 
 # Bing (default)
-downloader("golden retriever", limit=50)
+result = Downloader().search("golden retriever", limit=50)
 # → downloads to ./dataset/golden retriever/
-# → writes ./dataset/golden retriever/_manifest.json
+print(result.count, "images saved to", result.output_dir)
 
 # DuckDuckGo
-downloader("golden retriever", limit=50, engine="duckduckgo")
+result = Downloader().search("golden retriever", limit=50, engine="duckduckgo")
 ```
+
+The legacy `downloader()` function (`downloader("golden retriever", limit=50)`)
+still works and is kept for backwards compatibility.
 
 ```bash
 # Bing (default)
@@ -412,9 +418,11 @@ downloader("cats", limit=150, output_dir="dataset")
 downloader("cats", limit=150, output_dir="dataset", engine="duckduckgo")
 ```
 
-### Download manifest
+### Download manifest (legacy)
 
-After every run, `_manifest.json` is written to the output directory:
+The legacy `downloader()` function also writes a `_manifest.json` file to the
+output directory after every run — a v3.1.x format kept for backwards
+compatibility:
 
 ```json
 {
@@ -423,7 +431,9 @@ After every run, `_manifest.json` is written to the output directory:
 }
 ```
 
-Successive runs merge into the existing manifest.
+Successive runs merge into the existing manifest. Prefer the JSONL
+`manifest.jsonl` export (see above) for new tooling — it records one
+entry per download attempt, including errors and skips.
 
 ### Backward compatibility
 
