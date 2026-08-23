@@ -18,7 +18,7 @@ Public surface:
 
 - :class:`ManifestWriter` — the writer
 - :class:`ManifestFieldError` — raised when an unknown field is requested
-- :data:`DEFAULT_MANIFEST_FIELDS` — the default 10-field set
+- :data:`DEFAULT_MANIFEST_FIELDS` — the default field set (11 fields)
 
 The on-disk record format is the public contract; it is described by
 ``docs/manifest.schema.json`` (JSON Schema Draft 2020-12) in the
@@ -35,7 +35,7 @@ from typing import IO, Any
 
 logger = logging.getLogger(__name__)
 
-# Default field set: "core + provenance" (10 fields).
+# Default field set: "core + provenance + caption" (11 fields).
 # These are the fields written to the manifest when the user does
 # not supply an explicit ``manifest_fields`` list. The order is
 # stable and is the on-disk schema; downstream tools can rely on it.
@@ -50,6 +50,7 @@ DEFAULT_MANIFEST_FIELDS: list[str] = [
     "query",
     "source_page",
     "downloaded_at",
+    "caption",
 ]
 
 

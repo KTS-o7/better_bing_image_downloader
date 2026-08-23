@@ -13,6 +13,7 @@ A fast, reliable Python library and CLI tool for bulk downloading images from Bi
 - **Embeddable `Downloader` API** — search programmatically with `Result` / `ImageResult` value objects, lifecycle hooks (`on_image`, `on_error`, `on_progress`, `on_engine_start`, `on_engine_done`), and `search_async` for asyncio code
 - **Two search engines, one API** — Bing (default) or DuckDuckGo, switched via a single `engine=` parameter
 - **JSONL manifest export** (`manifest=True`) — one record per download attempt, crash-safe, downstream-auditable
+- **Image–text pairs** — the search engine's title/caption for each image is recorded in the manifest and on `ImageResult.caption`, ready for multimodal dataset building
 - **`min_dimension` filter** — skip images smaller than N pixels on either side, useful for ML training data prep
 - **HTTP/HTTPS proxy support** — route all traffic through a proxy with a single `proxy=` parameter
 - **Cancel mid-run** via `CancelToken` — abort a `search()` cleanly without leaving partial state
@@ -351,7 +352,10 @@ Each line is a self-contained JSON object:
 Status values are `"ok"`, `"error"`, or `"skipped"`. The
 `source_page` field is the URL of the search-results page the
 image came from. Failed downloads record the typed exception
-class name in `error` (e.g. `"NetworkError"`). The record format
+class name in `error` (e.g. `"NetworkError"`). The `caption`
+field (v3.9.0+) carries the search engine's title/alt text for
+the image, so a manifest doubles as an image–text pair dataset.
+The record format
 is described by [`docs/manifest.schema.json`](docs/manifest.schema.json)
 (JSON Schema Draft 2020-12).
 

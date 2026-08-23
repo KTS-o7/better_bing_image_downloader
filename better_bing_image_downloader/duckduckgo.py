@@ -257,7 +257,13 @@ class DuckDuckGo(ImageEngine):
             data = json.loads(text)
         except json.JSONDecodeError as e:
             raise RuntimeError(f"Failed to parse DuckDuckGo i.js response as JSON: {e}") from e
-        return [r["image"] for r in data.get("results", []) if r.get("image")]
+        results = data.get("results", [])
+        # v3.9.0+: capture per-result titles as captions for the
+        # manifest and ImageResult.caption.
+        for r in results:
+            if r.get("image") and r.get("title"):
+                self.captions[r["image"]] = r["title"]
+        return [r["image"] for r in results if r.get("image")]
 
     # --- Main loop ---
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/KTS-o7/better_bing_image_downloader/main/docs/manifest.schema.json",
   "title": "better-bing-image-downloader manifest record",
-  "description": "One line of a manifest.jsonl file written by Downloader.search(manifest=True) (v3.5.0+). This schema describes a full record written with the default 10-field set (DEFAULT_MANIFEST_FIELDS). When a custom manifest_fields list is configured, each record is a projection of this schema containing only the requested fields.",
+  "description": "One line of a manifest.jsonl file written by Downloader.search(manifest=True) (v3.5.0+). This schema describes a full record written with the default field set (DEFAULT_MANIFEST_FIELDS; 10 fields in v3.5.0-v3.8.x, 11 fields from v3.9.0 with the addition of 'caption'). When a custom manifest_fields list is configured, each record is a projection of this schema containing only the requested fields.",
   "type": "object",
   "required": [
     "index",
@@ -14,7 +14,8 @@
     "engine",
     "query",
     "source_page",
-    "downloaded_at"
+    "downloaded_at",
+    "caption"
   ],
   "additionalProperties": false,
   "properties": {
@@ -59,6 +60,10 @@
       "type": "string",
       "format": "date-time",
       "description": "ISO 8601 UTC timestamp, e.g. '2026-06-13T10:20:30Z'."
+    },
+    "caption": {
+      "type": ["string", "null"],
+      "description": "Caption/title text supplied by the search backend (Bing 't' field, DuckDuckGo 'title' field). Null when the engine did not provide one. Added in v3.9.0."
     }
   }
 }

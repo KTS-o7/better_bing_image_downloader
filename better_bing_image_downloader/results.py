@@ -44,6 +44,10 @@ class ImageResult(NamedTuple):
         Size of the saved file in bytes.
     mime_type : str
         Detected MIME type (``"image/jpeg"``, ``"image/png"`` etc.).
+    caption : str | None
+        Caption/title text supplied by the search backend for this
+        image (v3.9.0+). ``None`` when the engine did not provide one.
+        Useful for building image–text pair datasets.
     """
 
     path: Path
@@ -53,6 +57,7 @@ class ImageResult(NamedTuple):
     image_index: int
     size_bytes: int
     mime_type: str
+    caption: str | None = None
 
 
 class Result:
