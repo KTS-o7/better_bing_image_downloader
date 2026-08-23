@@ -360,6 +360,13 @@ class ImageEngine(ABC):
         # capture per-image provenance. ``None`` until the first page
         # fetch; remains ``None`` for engines that don't track it.
         self.last_page_url: str | None = None
+        # ``captions`` (v3.9.0+) maps image URL -> caption/title text
+        # supplied by the search backend (Bing's ``t`` field,
+        # DuckDuckGo's ``title`` field). Engines populate it during
+        # link extraction; ``Downloader.search`` copies it into
+        # ``ImageResult.caption`` and the manifest ``caption`` field.
+        # Empty for engines that don't surface captions.
+        self.captions: dict[str, str] = {}
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

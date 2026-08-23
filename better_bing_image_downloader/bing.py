@@ -7,6 +7,8 @@ Improved Author: Krishnatejaswi S (shentharkrishnatejaswi@gmail.com)
 from __future__ import annotations
 
 import gzip
+import html as html_module
+import json
 import logging
 import re
 import time
@@ -174,6 +176,28 @@ class Bing(ImageEngine):
         """Extract ``murl`` image URLs from a Bing result page."""
         return re.findall(r"murl&quot;:&quot;(.*?)&quot;", html)
 
+    @staticmethod
+    def _extract_captions(html: str) -> dict[str, str]:
+        """Extract image captions (result titles) from a Bing result page.
+
+        Each result anchor carries an ``m`` attribute containing
+        HTML-escaped JSON with ``murl`` (image URL) and ``t`` (title)
+        fields. Returns a ``{murl: title}`` dict for results that have
+        both. Best-effort: blobs that fail to parse are skipped, and
+        results without a title simply don't appear in the dict.
+        """
+        captions: dict[str, str] = {}
+        for blob in re.findall(r'\bm="({.*?})"', html):
+            try:
+                meta = json.loads(html_module.unescape(blob))
+            except (ValueError, TypeError):
+                continue
+            url = meta.get("murl")
+            title = meta.get("t")
+            if url and title:
+                captions[url] = title
+        return captions
+
     def run(self) -> None:
         """Download images until ``self.limit`` is reached or pages are exhausted."""
         page_counter = 0
@@ -211,6 +235,7 @@ class Bing(ImageEngine):
                 break
 
             links = self._extract_links(html)
+            self.captions.update(self._extract_captions(html))
             if self.verbose:
                 logging.info(
                     "[%%] Indexed %d Images on Page %d.",

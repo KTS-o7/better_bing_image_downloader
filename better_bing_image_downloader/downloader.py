@@ -614,6 +614,7 @@ class Downloader:
                 image_index=engine_obj.download_count,  # set by save_image
                 size_bytes=size,
                 mime_type=mime,
+                caption=getattr(engine_obj, "captions", {}).get(link),
             )
             images.append(ir)
             if self.on_image:
@@ -873,6 +874,11 @@ def _append_manifest_record(
             "query": manifest_ctx.query,
             "source_page": getattr(engine_obj, "last_page_url", None),
             "downloaded_at": _utcnow_iso(),
+            # ``caption`` (v3.9.0+): title/alt text from the search
+            # backend, looked up from the engine's captions dict.
+            # None for error/skipped records and engines without
+            # caption support.
+            "caption": getattr(engine_obj, "captions", {}).get(url),
         }
     )
 

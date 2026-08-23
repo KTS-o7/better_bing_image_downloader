@@ -93,6 +93,7 @@ def test_skipped_record_validates_against_schema(schema: dict) -> None:
         "query": "cats",
         "source_page": "https://www.bing.com/images/async?q=cats",
         "downloaded_at": "2026-06-13T15:30:42Z",
+        "caption": "A tiny cat thumbnail",
     }
     errors = list(_validator(schema).iter_errors(record))
     assert errors == [], f"skipped record failed schema validation: {errors}"
@@ -119,5 +120,6 @@ def test_schema_rejects_unknown_status(schema: dict) -> None:
         "query": "cats",
         "source_page": None,
         "downloaded_at": "2026-06-13T15:30:42Z",
+        "caption": None,
     }
     assert not _validator(schema).is_valid(record)

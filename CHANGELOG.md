@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Image–text pairs**: the search engine's caption/title for each
+  image is now captured — Bing's `t` field and DuckDuckGo's `title`
+  field — and exposed on `ImageResult.caption` and as a new `caption`
+  field (the 11th) in `manifest.jsonl` records. `null` when the engine
+  provides no caption. `docs/manifest.schema.json` was updated to
+  match. Useful for building multimodal training datasets.
+
 ## [3.8.1] - 2026-08-23
 
 ### Deprecated

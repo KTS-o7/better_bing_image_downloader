@@ -79,7 +79,7 @@ def test_writer_filters_to_configured_fields(tmp_path: Path) -> None:
 
 
 def test_writer_default_fields_are_core_plus_provenance(tmp_path: Path) -> None:
-    """The default field set is the 10 core+provenance fields, in the documented order."""
+    """The default field set is the documented core+provenance+caption fields, in order."""
     from better_bing_image_downloader.manifest import (
         DEFAULT_MANIFEST_FIELDS,
         ManifestWriter,
@@ -96,6 +96,7 @@ def test_writer_default_fields_are_core_plus_provenance(tmp_path: Path) -> None:
         "query",
         "source_page",
         "downloaded_at",
+        "caption",
     ]
 
     target = tmp_path / "manifest.jsonl"
