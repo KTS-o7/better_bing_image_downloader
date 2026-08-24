@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stdlib-only) and `parquet` (all records, needs the new optional
   `[parquet]` extra). Also available as `bbid export --format ...`.
   Partial manifests from crashed runs export cleanly.
+- **MCP server** (#65): `bbid-mcp` serves a `search_images` tool over
+  stdio so LLM agents (Claude Code/Desktop, LangGraph) can trigger
+  image collection. Requires the new optional `[mcp]` extra. Searches
+  are serialized with a lock and each call uses a fresh `Downloader`,
+  per the documented thread-safety contract.
 
 ### Fixed
 

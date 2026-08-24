@@ -481,6 +481,33 @@ downloader("cats", filter="photo")
 downloader("cats", image_filter="photo")
 ```
 
+## MCP server (LLM agents)
+
+LLM agents (Claude Code/Desktop, LangGraph, …) can trigger image
+collection over the Model Context Protocol. Install the extra and run
+the stdio server:
+
+```bash
+pip install "better-bing-image-downloader[mcp]"
+bbid-mcp
+```
+
+Claude Desktop / Claude Code config:
+
+```json
+{
+  "mcpServers": {
+    "bbid": { "command": "bbid-mcp" }
+  }
+}
+```
+
+The server exposes one tool, `search_images(query, limit, engine,
+output_dir, manifest)`, which downloads images and returns a summary
+dict with `count`, `output_dir`, `manifest_path`, `skipped`, and
+`errors`. Searches are serialized and each call uses a fresh
+`Downloader`, per the thread-safety contract.
+
 ## CLI — bbid
 
 The `bbid` command is installed automatically with the package:

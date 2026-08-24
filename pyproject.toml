@@ -37,6 +37,9 @@ dependencies = [
 parquet = [
     "pyarrow>=14.0",
 ]
+mcp = [
+    "mcp>=1.0",
+]
 google = [
     "selenium>=4.0.0",
     "chromedriver-autoinstaller>=0.6.0",
@@ -55,6 +58,7 @@ dev = [
 
 [project.scripts]
 bbid = "better_bing_image_downloader.download:main"
+bbid-mcp = "better_bing_image_downloader.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/KTS-o7/better_bing_image_downloader"
