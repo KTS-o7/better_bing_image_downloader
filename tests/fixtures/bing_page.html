@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<!-- Golden fixture: representative Bing image-search results page.
+     Pins the parser contract for Bing._extract_links / _extract_captions.
+     Structure mirrors the real page: each result is an <a class="iusc">
+     whose m attribute holds HTML-escaped JSON with murl (image URL),
+     turl (thumbnail), and t (title). Recorded 2026-08; regenerate if
+     Bing's layout changes and the canary workflow fires. -->
+<html lang="en">
+<head><title>red panda - Bing images</title></head>
+<body>
+<div id="mmComponent_images_1">
+  <ul class="dgControl_list">
+    <li>
+      <div class="imgpt">
+        <a class="iusc" m="{&quot;cid&quot;:&quot;a1b2c3&quot;,&quot;murl&quot;:&quot;https://example.test/images/red-panda-1.jpg&quot;,&quot;turl&quot;:&quot;https://tse1.example.test/th?id=OIP.a1b2c3&quot;,&quot;md5&quot;:&quot;0123456789abcdef0123456789abcdef&quot;,&quot;t&quot;:&quot;Red panda climbing a tree&quot;,&quot;desc&quot;:&quot;Example caption&quot;}" href="https://example.test/page1" h="ID=images,1.1">
+          <img src="https://tse1.example.test/th?id=OIP.a1b2c3" alt="Red panda climbing a tree"/>
+        </a>
+      </div>
+    </li>
+    <li>
+      <div class="imgpt">
+        <a class="iusc" m="{&quot;cid&quot;:&quot;d4e5f6&quot;,&quot;murl&quot;:&quot;https://example.test/images/red-panda-2.png&quot;,&quot;turl&quot;:&quot;https://tse1.example.test/th?id=OIP.d4e5f6&quot;,&quot;t&quot;:&quot;Red panda eating bamboo&quot;}" href="https://example.test/page2" h="ID=images,2.1">
+          <img src="https://tse1.example.test/th?id=OIP.d4e5f6" alt="Red panda eating bamboo"/>
+        </a>
+      </div>
+    </li>
+    <li>
+      <div class="imgpt">
+        <!-- Result without a title: parsers must tolerate it. -->
+        <a class="iusc" m="{&quot;cid&quot;:&quot;g7h8i9&quot;,&quot;murl&quot;:&quot;https://example.test/images/red-panda-3.webp&quot;,&quot;turl&quot;:&quot;https://tse1.example.test/th?id=OIP.g7h8i9&quot;}" href="https://example.test/page3" h="ID=images,3.1">
+          <img src="https://tse1.example.test/th?id=OIP.g7h8i9" alt=""/>
+        </a>
+      </div>
+    </li>
+  </ul>
+</div>
+</body>
+</html>

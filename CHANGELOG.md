@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Endpoint-drift early warning** (#66): when a Bing/DuckDuckGo page
+  fetches successfully but yields zero extracted image links, the
+  engines now log a distinctive "layout may have changed" warning.
+- Golden-file parser tests (`tests/fixtures/bing_page.html`,
+  `tests/fixtures/ddg_page.json`) pin the extraction contract without
+  network access.
+- A weekly **canary workflow** (`.github/workflows/canary.yml`) runs
+  the network-gated tests against the live endpoints every Monday and
+  opens a `bug` issue automatically on failure.
+
 ### Fixed
 
 - `tests/test_cli.py::test_version_flag_via_argv` failed on Windows

@@ -236,6 +236,15 @@ class Bing(ImageEngine):
 
             links = self._extract_links(html)
             self.captions.update(self._extract_captions(html))
+            if not links:
+                # Distinctive signal for endpoint drift (v3.9.x+): the
+                # page fetched fine but the parser found nothing — either
+                # the query has no results or Bing changed its layout.
+                logging.warning(
+                    "Bing page fetched but no image links were extracted. "
+                    "If this happens for popular queries, the engine "
+                    "layout may have changed — please open an issue."
+                )
             if self.verbose:
                 logging.info(
                     "[%%] Indexed %d Images on Page %d.",
