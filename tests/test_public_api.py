@@ -39,6 +39,7 @@ _SUBMODULE_OF = {
     "Result": "results",
     "WriteError": "base",
     "downloader": "download",
+    "export_manifest": "export",
 }
 
 

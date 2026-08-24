@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the network-gated tests against the live endpoints every Monday and
   opens a `bug` issue automatically on failure.
 
+- **Manifest export** (#64): `export_manifest()` converts a
+  `manifest.jsonl` into ML-pipeline formats — `url-list`
+  (img2dataset-compatible, one URL per line, `ok` records only,
+  stdlib-only) and `parquet` (all records, needs the new optional
+  `[parquet]` extra). Also available as `bbid export --format ...`.
+  Partial manifests from crashed runs export cleanly.
+
 ### Fixed
 
 - `tests/test_cli.py::test_version_flag_via_argv` failed on Windows
