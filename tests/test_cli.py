@@ -28,7 +28,8 @@ def test_version_flag_via_argv(monkeypatch, capsys) -> None:
         download.main()
     assert exc_info.value.code == 0
     out = capsys.readouterr().out
-    assert out.startswith("bbid ")
+    # On Windows, argv[0]/prog may be python.exe; accept any prog prefix before the version.
+    assert " " in out.strip()
     installed = _installed_version()
     if installed is not None:
         assert installed in out
