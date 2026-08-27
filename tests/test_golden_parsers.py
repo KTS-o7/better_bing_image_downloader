@@ -107,3 +107,18 @@ class TestEndpointDriftWarning:
         with caplog.at_level(logging.WARNING):
             engine.run()
         assert any("layout may have changed" in r.message for r in caplog.records)
+
+    def test_duckduckgo_warns_when_page_yields_no_links(self, tmp_path, caplog) -> None:
+        import logging
+
+        with (
+            patch.object(DuckDuckGo, "_fetch_vqd", return_value="vqd"),
+            patch.object(DuckDuckGo, "_fetch_page", return_value=[]),
+            patch.object(DuckDuckGo, "download_image"),
+        ):
+            engine = DuckDuckGo("cats", 10, str(tmp_path), verbose=False)
+            with caplog.at_level(logging.WARNING):
+                engine.run()
+        assert any("layout may have changed" in r.message for r in caplog.records), [
+            r.message for r in caplog.records
+        ]
