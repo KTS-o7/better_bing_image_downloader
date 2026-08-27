@@ -38,7 +38,7 @@ parquet = [
     "pyarrow>=14.0",
 ]
 mcp = [
-    "mcp>=1.0",
+    "mcp>=1.0,<2; python_version >= '3.10'",
 ]
 google = [
     "selenium>=4.0.0",
@@ -54,7 +54,7 @@ dev = [
     "mypy>=1.10",
     "pre-commit>=3.5",
     "jsonschema>=4.0",
-    "mcp>=1.0",
+    "mcp>=1.0,<2; python_version >= '3.10'",
 ]
 
 [project.scripts]

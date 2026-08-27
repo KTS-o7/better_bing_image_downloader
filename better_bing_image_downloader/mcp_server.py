@@ -16,15 +16,24 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import Any
 
 from .downloader import Downloader
 
+# ``FastMCP`` is provided by the optional ``mcp`` package (1.x — see
+# ``[project.optional-dependencies] mcp``). Decoupling the runtime symbol
+# from the import lets mypy see ``FastMCP`` as ``Any`` regardless of which
+# branch ran, and dodges ``[unused-ignore]`` lint errors when ``mcp`` is
+# installed in a dev/CI environment.
+FastMCP: Any
+
 try:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import FastMCP as _fastmcp_real
+
+    FastMCP = _fastmcp_real
 
     _HAS_MCP = True
 except ImportError:  # pragma: no cover
-    FastMCP = None  # type: ignore[misc, assignment]
     _HAS_MCP = False
 
 __all__ = ["main"]
