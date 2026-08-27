@@ -22,13 +22,24 @@ def _installed_version() -> str | None:
 
 
 def test_version_flag_via_argv(monkeypatch, capsys) -> None:
-    """``bbid --version`` exits 0 and prints the installed version."""
+    """``bbid --version`` exits 0 and prints the installed version.
+
+    Deliberately not asserting the output starts with "bbid ": since
+    Python 3.13, argparse's default ``prog`` is derived from
+    ``sys.orig_argv`` (the real process invocation) whenever it detects
+    the interpreter was started via ``-m``, and that takes priority over
+    a monkeypatched ``sys.argv``. Running this suite via
+    ``python -m pytest`` therefore makes ``prog`` render as
+    ``"python.exe -m pytest"`` regardless of the argv patched above --
+    that's expected argparse behavior, not something this test should
+    fight. ``bbid --version`` run for real (see
+    test_version_flag_via_subprocess below) still prints "bbid ...".
+    """
     monkeypatch.setattr(sys, "argv", ["bbid", "--version"])
     with pytest.raises(SystemExit) as exc_info:
         download.main()
     assert exc_info.value.code == 0
     out = capsys.readouterr().out
-    assert out.startswith("bbid ")
     installed = _installed_version()
     if installed is not None:
         assert installed in out

@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `tests/test_cli.py::test_version_flag_via_argv` failed on Windows
+  (and on any platform when the suite is run via `python -m pytest`)
+  because it asserted `bbid --version`'s output starts with `"bbid "`.
+  Since Python 3.13, argparse derives its default `prog` from
+  `sys.orig_argv` (the real process invocation) whenever it detects a
+  `-m`-style launch, which takes priority over the test's monkeypatched
+  `sys.argv` — so `prog` rendered as `"python.exe -m pytest"` instead.
+  `bbid --version` itself is unaffected; this was a test-strictness
+  bug, not a library bug (issue #68). The test now only asserts what
+  the CLI actually guarantees: exit code 0 and the installed version
+  string (or `"unknown"`) in the output.
+
 ## [3.9.0] - 2026-08-23
 
 ### Added
