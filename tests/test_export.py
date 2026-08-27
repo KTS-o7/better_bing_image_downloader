@@ -146,11 +146,13 @@ def test_cli_export_url_list(monkeypatch, tmp_path) -> None:
 
 
 def test_cli_export_does_not_break_query_invocation(monkeypatch) -> None:
-    """``bbid export`` as a *query* is not hijacked... actually it is: guard the contract.
+    """Pin the ``bbid export`` intercept in :func:`download.main`.
 
-    A search for the literal query ``export`` now routes to the export
-    parser, which exits with an argparse error when required flags are
-    missing — this test pins that intended behaviour.
+    The first positional token ``export`` is routed to
+    :func:`_export_main` before the search-query parser runs, so
+    ``bbid export`` (no flags) hits the export parser and exits with
+    argparse's ``usage`` error (exit code 2). ``bbid "query"`` is
+    unchanged — the intercept only fires on the exact first token.
     """
     monkeypatch.setattr(sys, "argv", ["bbid", "export"])
     with pytest.raises(SystemExit) as exc_info:
