@@ -327,14 +327,17 @@ class DuckDuckGo(ImageEngine):
 
             if not links:
                 logging.info("[%%] No more images are available")
-                # Endpoint-drift signal (v3.9.x+): the fetch succeeded
-                # but zero results were parsed — legit for exhausted or
-                # empty queries, suspicious for popular ones.
-                logging.warning(
-                    "DuckDuckGo page fetched but returned zero image results. "
-                    "If this happens for popular queries, the engine "
-                    "layout may have changed — please open an issue."
-                )
+                if page_num == 0:
+                    # Endpoint-drift signal (v3.10.0+): the first page
+                    # fetched successfully but yielded zero results —
+                    # that is the normal end-of-pagination response for
+                    # later pages, so only a bare first page is
+                    # suspicious for popular queries.
+                    logging.warning(
+                        "DuckDuckGo page fetched but returned zero image results. "
+                        "If this happens for popular queries, the engine "
+                        "layout may have changed — please open an issue."
+                    )
                 break
 
             # Filter seen/badsites

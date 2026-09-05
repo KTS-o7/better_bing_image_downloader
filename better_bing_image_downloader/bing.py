@@ -237,7 +237,7 @@ class Bing(ImageEngine):
             links = self._extract_links(html)
             self.captions.update(self._extract_captions(html))
             if not links:
-                # Distinctive signal for endpoint drift (v3.9.x+): the
+                # Distinctive signal for endpoint drift (v3.10.0+): the
                 # page fetched fine but the parser found nothing — either
                 # the query has no results or Bing changed its layout.
                 logging.warning(
