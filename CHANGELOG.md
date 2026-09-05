@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-09-05
+
 ### Added
 
 - **Endpoint-drift early warning** (#66): when a Bing/DuckDuckGo page
