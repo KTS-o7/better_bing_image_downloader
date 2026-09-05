@@ -12,6 +12,7 @@ from .base import (
 from .bing import Bing
 from .download import downloader
 from .downloader import CancelToken, Downloader
+from .export import export_manifest
 from .manifest import DEFAULT_MANIFEST_FIELDS, ManifestFieldError, ManifestWriter
 from .results import ImageResult, Result
 
@@ -34,6 +35,7 @@ __all__ = [
     "Result",
     "WriteError",
     "downloader",
+    "export_manifest",
 ]
 
 # ``DuckDuckGo`` is exposed eagerly as of v3.1.1: ``brotli`` is a hard

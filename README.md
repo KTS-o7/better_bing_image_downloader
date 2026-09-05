@@ -377,6 +377,30 @@ CLI equivalent:
 bbid --manifest --manifest-fields index,status,url,md5 "red panda"
 ```
 
+#### Exporting manifests (v3.10.0+)
+
+Convert a `manifest.jsonl` into formats ML pipelines already consume:
+
+```python
+from better_bing_image_downloader import export_manifest
+
+# img2dataset-compatible: one image URL per line, ok records only
+export_manifest("dataset/red panda/manifest.jsonl", "url-list", "urls.txt")
+
+# Parquet: all records (ok, error, skipped) with every field
+# requires: pip install "better-bing-image-downloader[parquet]"
+export_manifest("dataset/red panda/manifest.jsonl", "parquet", "manifest.parquet")
+```
+
+CLI equivalent:
+
+```bash
+bbid export --format url-list --manifest "dataset/red panda/manifest.jsonl" --dest urls.txt
+```
+
+Partial manifests from crashed runs export cleanly — blank or malformed
+lines are skipped with a warning.
+
 #### Minimum dimension filter (v3.6.0+)
 
 For ML training data, thumbnails are noise. Pass `min_dimension` to

@@ -34,6 +34,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+parquet = [
+    "pyarrow>=14.0",
+]
 google = [
     "selenium>=4.0.0",
     "chromedriver-autoinstaller>=0.6.0",

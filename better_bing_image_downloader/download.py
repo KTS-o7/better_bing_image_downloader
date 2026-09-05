@@ -15,6 +15,7 @@ import argparse
 import json
 import logging
 import shutil
+import sys
 import warnings
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
@@ -244,8 +245,53 @@ def _write_legacy_manifest(image_dir: Path, result) -> None:
         logging.error("Failed to write manifest: %s", e)
 
 
+def _export_main(argv: list[str]) -> None:
+    """Handle ``bbid export --format ... --manifest ... --dest ...``.
+
+    Implemented as a separate parser invoked from :func:`main` rather
+    than argparse subparsers, so ``bbid "query"`` keeps working
+    unchanged.
+    """
+    from .export import export_manifest
+
+    parser = argparse.ArgumentParser(
+        prog="bbid export",
+        description="Export a manifest.jsonl to an ML-pipeline format.",
+    )
+    parser.add_argument(
+        "--format",
+        type=str,
+        required=True,
+        choices=["url-list", "parquet"],
+        help="Output format: 'url-list' (one URL per line, ok records only; "
+        "img2dataset-compatible) or 'parquet' (all records; needs the "
+        "'parquet' extra).",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=str,
+        required=True,
+        help="Path to the manifest.jsonl file to export.",
+    )
+    parser.add_argument(
+        "--dest",
+        type=str,
+        required=True,
+        help="Destination file path.",
+    )
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    rows = export_manifest(args.manifest, args.format, args.dest)
+    logging.info("Exported %d rows to %s", rows, args.dest)
+
+
 def main() -> None:
     """Entry point for the ``bbid`` CLI command."""
+    # ``export`` is a subcommand-shaped invocation; intercept it before
+    # the positional-query parser so ``bbid "query"`` is untouched.
+    if sys.argv[1:2] == ["export"]:
+        _export_main(sys.argv[2:])
+        return
     parser = argparse.ArgumentParser(description="Download images using Bing or DuckDuckGo.")
     try:
         _version = pkg_version("better-bing-image-downloader")
