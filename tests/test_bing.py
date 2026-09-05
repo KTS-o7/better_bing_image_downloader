@@ -1,8 +1,11 @@
+import os
 import tempfile
 import threading
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from better_bing_image_downloader.bing import Bing
 
@@ -146,6 +149,19 @@ class TestBingCountLock(unittest.TestCase):
         b = Bing("cats", 10, self.tmp, "off", 10)
         self.assertTrue(hasattr(b, "_count_lock"))
         self.assertIsInstance(b._count_lock, type(threading.Lock()))
+
+
+@pytest.mark.skipif(
+    os.environ.get("BBID_RUN_NETWORK_TESTS") != "1",
+    reason="Set BBID_RUN_NETWORK_TESTS=1 to run live network tests",
+)
+class TestBingEndToEnd:
+    def test_real_fetch(self, tmp_path):
+        b = Bing("red panda", 1, str(tmp_path), timeout=30, verbose=False)
+        b.run()
+        # At least one file should have been saved
+        files = [p for p in tmp_path.iterdir() if p.is_file() and not p.name.startswith(".")]
+        assert len(files) >= 1, f"No images downloaded. Files: {list(tmp_path.iterdir())}"
 
 
 if __name__ == "__main__":
