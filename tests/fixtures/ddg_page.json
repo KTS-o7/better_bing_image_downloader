@@ -1,0 +1,31 @@
+{
+  "results": [
+    {
+      "image": "https://example.test/images/red-panda-1.jpg",
+      "title": "Red panda climbing a tree",
+      "url": "https://example.test/page1",
+      "height": 1080,
+      "width": 1920,
+      "thumbnail": "https://tse1.example.test/th?id=OIP.a1b2c3",
+      "source": "Bing"
+    },
+    {
+      "image": "https://example.test/images/red-panda-2.png",
+      "title": "Red panda eating bamboo",
+      "url": "https://example.test/page2",
+      "height": 800,
+      "width": 1200,
+      "thumbnail": "https://tse1.example.test/th?id=OIP.d4e5f6",
+      "source": "Bing"
+    },
+    {
+      "image": "https://example.test/images/red-panda-3.webp",
+      "url": "https://example.test/page3",
+      "height": 600,
+      "width": 800,
+      "thumbnail": "https://tse1.example.test/th?id=OIP.g7h8i9",
+      "source": "Bing"
+    }
+  ],
+  "next": "i.js?q=red+panda&s=100"
+}
