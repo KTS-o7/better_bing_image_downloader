@@ -31,6 +31,7 @@ repository. Read this before making non-trivial changes.
 | `export.py` | `export_manifest()` — manifest to `url-list` / `parquet` (v3.10.0+) + `bbid export` wiring | ✅ Yes |
 | `mcp_server.py` | `bbid-mcp` stdio server exposing `search_images` (v3.10.0+, `[mcp]` extra) | ✅ Yes |
 | `downloader.py` | `Downloader` class, engine registry, lifecycle hooks. **v3.2.0+ entry point** | ✅ Yes |
+| `cancel.py` | `CancelToken` one-shot cancellation flag (split out of `downloader.py`, re-exported) | ✅ Yes |
 | `results.py` | `Result` and `ImageResult` value objects returned by `Downloader.search()` | ✅ Yes |
 | `download.py` | Module-level `downloader()` function (legacy wrapper around `Downloader`) and `bbid` CLI | ✅ Yes |
 | `__init__.py` | Public API surface — re-exports `Bing`, `DuckDuckGo`, `Downloader`, `ImageResult`, `Result`, `downloader` | ✅ Yes |

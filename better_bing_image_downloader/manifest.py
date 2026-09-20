@@ -30,8 +30,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .base import ImageEngine
 
 logger = logging.getLogger(__name__)
 
@@ -155,3 +159,99 @@ class ManifestWriter:
 
     def __exit__(self, *exc: Any) -> None:
         self.close()
+
+
+def _utcnow_iso() -> str:
+    """Return the current UTC time as an ISO 8601 string with a trailing 'Z'.
+
+    Used by the manifest writer to stamp each record's
+    ``downloaded_at`` field. Format: ``YYYY-MM-DDTHH:MM:SSZ``.
+
+    Moved here from ``downloader.py`` in the downloader split (#83);
+    re-exported there so existing imports keep working.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+class _ManifestContext:
+    """Invocation-local manifest state for a single ``search()`` call.
+
+    Holds the writer, the engine/query provenance metadata, and the
+    1-based record counter. A fresh instance is created at the top of
+    every ``search()`` call and closed over by the success/error/skip
+    hooks — it is deliberately NOT stored on the ``Downloader``
+    instance, so a nested ``search()`` fired from an ``on_image``
+    hook, or two threads running ``search()`` concurrently on the
+    same ``Downloader``, each get independent writers and counters.
+
+    Moved here from ``downloader.py`` in the downloader split (#83).
+    """
+
+    __slots__ = ("writer", "engine_name", "query", "index")
+
+    def __init__(self, writer: ManifestWriter, engine_name: str, query: str) -> None:
+        self.writer = writer
+        self.engine_name = engine_name
+        self.query = query
+        # 1-based record counter, incremented by
+        # ``_append_manifest_record`` on every record.
+        self.index = 0
+
+
+def _append_manifest_record(
+    manifest_ctx: _ManifestContext,
+    status: str,
+    url: str,
+    file_path: Path | None,
+    md5: str | None,
+    error: BaseException | None,
+    engine_obj: ImageEngine,
+) -> None:
+    """Build a manifest record dict and append it to the context's writer.
+
+    Called from the success and error paths inside ``Downloader.search``
+    when ``manifest=True`` was passed. The record is filtered to
+    the writer's configured fields automatically.
+
+    ``file_path`` is stored relative to ``output_dir`` (i.e. as
+    ``"<query>/Image_1.jpg"``) so the manifest is portable
+    across machines. If the relative-to conversion fails (e.g.
+    the engine wrote outside ``output_dir``), the basename is
+    used as a fallback.
+
+    Moved here from ``downloader.py`` in the downloader split (#83).
+    """
+    # ``index`` is 1-based and counts every record (success or
+    # failure). We keep a per-search counter on the invocation-local
+    # context instead of deriving the index from the engine's internal
+    # ``download_count``: the engine only advances that counter on
+    # a successful save, so two consecutive error/skip records
+    # would otherwise share the same ``index`` value.
+    manifest_ctx.index += 1
+    index = manifest_ctx.index
+    # Resolve file path relative to output_dir.
+    file_rel: str | None = None
+    if file_path is not None:
+        try:
+            file_rel = str(file_path.resolve().relative_to(Path.cwd()))
+        except ValueError:
+            file_rel = file_path.name
+    manifest_ctx.writer.append(
+        {
+            "index": index,
+            "status": status,
+            "url": url,
+            "file": file_rel,
+            "md5": md5,
+            "error": type(error).__name__ if error is not None else None,
+            "engine": manifest_ctx.engine_name,
+            "query": manifest_ctx.query,
+            "source_page": getattr(engine_obj, "last_page_url", None),
+            "downloaded_at": _utcnow_iso(),
+            # ``caption`` (v3.9.0+): title/alt text from the search
+            # backend, looked up from the engine's captions dict.
+            # None for error/skipped records and engines without
+            # caption support.
+            "caption": getattr(engine_obj, "captions", {}).get(url),
+        }
+    )

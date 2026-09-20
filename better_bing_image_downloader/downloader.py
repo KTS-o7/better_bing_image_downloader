@@ -30,14 +30,19 @@ import threading
 import time
 import urllib.request
 import warnings
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
 from .base import DEFAULT_VERBOSE, ImageEngine
 from .bing import Bing
+from .cancel import CancelToken
 from .duckduckgo import DuckDuckGo
-from .manifest import DEFAULT_MANIFEST_FIELDS, ManifestWriter
+from .manifest import (
+    DEFAULT_MANIFEST_FIELDS,
+    ManifestWriter,
+    _append_manifest_record,
+    _ManifestContext,
+)
 from .results import ImageResult, Result
 
 __all__ = [
@@ -68,65 +73,6 @@ from .base import (  # noqa: E402
     NetworkError,
     WriteError,
 )
-
-
-class CancelToken:
-    """A simple thread-safe one-shot cancellation flag.
-
-    Pass an instance to :meth:`Downloader.search` via the ``cancel=``
-    keyword argument; call :meth:`cancel` from another thread (or a
-    signal handler) to abort the in-flight search. Engines that
-    cooperate with the token (Bing, DuckDuckGo as of v3.3.0) will
-    check it between page fetches and stop cleanly. The partial
-    :class:`Result` is returned with ``result.cancelled = True``.
-
-    Example
-    -------
-
-    >>> import threading
-    >>> from better_bing_image_downloader import Downloader
-    >>> from better_bing_image_downloader.downloader import CancelToken
-    >>>
-    >>> dl = Downloader()
-    >>> token = CancelToken()
-    >>>
-    >>> def cancel_after(tok, delay):
-    ...     import time
-    ...     time.sleep(delay)
-    ...     tok.cancel()
-    >>>
-    >>> threading.Thread(target=cancel_after, args=(token, 1.0)).start()
-    >>> result = dl.search("red panda", limit=1000, engine="duckduckgo", cancel=token)
-    >>> result.cancelled
-    True
-    """
-
-    __slots__ = ("_cancelled", "_lock")
-
-    def __init__(self) -> None:
-        self._cancelled = False
-        self._lock = threading.Lock()
-
-    @property
-    def cancelled(self) -> bool:
-        """``True`` once :meth:`cancel` has been called."""
-        # Reading is racy without the lock, but the worst case is
-        # the engine checks one iteration too many — which is fine.
-        return self._cancelled
-
-    def cancel(self) -> None:
-        """Mark this token as cancelled. Idempotent."""
-        with self._lock:
-            self._cancelled = True
-
-    def reset(self) -> None:
-        """Reset the token so it can be reused for a new search."""
-        with self._lock:
-            self._cancelled = False
-
-    def __repr__(self) -> str:
-        return f"CancelToken(cancelled={self._cancelled})"
-
 
 HookOnImage = Callable[[ImageResult], None]
 HookOnError = Callable[[str, BaseException], None]
@@ -819,95 +765,6 @@ class Downloader:
             min_dimension=min_dimension,
             license=license,
         )
-
-
-def _utcnow_iso() -> str:
-    """Return the current UTC time as an ISO 8601 string with a trailing 'Z'.
-
-    Used by the manifest writer to stamp each record's
-    ``downloaded_at`` field. Format: ``YYYY-MM-DDTHH:MM:SSZ``.
-    """
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-class _ManifestContext:
-    """Invocation-local manifest state for a single ``search()`` call.
-
-    Holds the writer, the engine/query provenance metadata, and the
-    1-based record counter. A fresh instance is created at the top of
-    every ``search()`` call and closed over by the success/error/skip
-    hooks — it is deliberately NOT stored on the ``Downloader``
-    instance, so a nested ``search()`` fired from an ``on_image``
-    hook, or two threads running ``search()`` concurrently on the
-    same ``Downloader``, each get independent writers and counters.
-    """
-
-    __slots__ = ("writer", "engine_name", "query", "index")
-
-    def __init__(self, writer: ManifestWriter, engine_name: str, query: str) -> None:
-        self.writer = writer
-        self.engine_name = engine_name
-        self.query = query
-        # 1-based record counter, incremented by
-        # ``_append_manifest_record`` on every record.
-        self.index = 0
-
-
-def _append_manifest_record(
-    manifest_ctx: _ManifestContext,
-    status: str,
-    url: str,
-    file_path: Path | None,
-    md5: str | None,
-    error: BaseException | None,
-    engine_obj: ImageEngine,
-) -> None:
-    """Build a manifest record dict and append it to the context's writer.
-
-    Called from the success and error paths inside ``Downloader.search``
-    when ``manifest=True`` was passed. The record is filtered to
-    the writer's configured fields automatically.
-
-    ``file_path`` is stored relative to ``output_dir`` (i.e. as
-    ``"<query>/Image_1.jpg"``) so the manifest is portable
-    across machines. If the relative-to conversion fails (e.g.
-    the engine wrote outside ``output_dir``), the basename is
-    used as a fallback.
-    """
-    # ``index`` is 1-based and counts every record (success or
-    # failure). We keep a per-search counter on the invocation-local
-    # context instead of deriving the index from the engine's internal
-    # ``download_count``: the engine only advances that counter on
-    # a successful save, so two consecutive error/skip records
-    # would otherwise share the same ``index`` value.
-    manifest_ctx.index += 1
-    index = manifest_ctx.index
-    # Resolve file path relative to output_dir.
-    file_rel: str | None = None
-    if file_path is not None:
-        try:
-            file_rel = str(file_path.resolve().relative_to(Path.cwd()))
-        except ValueError:
-            file_rel = file_path.name
-    manifest_ctx.writer.append(
-        {
-            "index": index,
-            "status": status,
-            "url": url,
-            "file": file_rel,
-            "md5": md5,
-            "error": type(error).__name__ if error is not None else None,
-            "engine": manifest_ctx.engine_name,
-            "query": manifest_ctx.query,
-            "source_page": getattr(engine_obj, "last_page_url", None),
-            "downloaded_at": _utcnow_iso(),
-            # ``caption`` (v3.9.0+): title/alt text from the search
-            # backend, looked up from the engine's captions dict.
-            # None for error/skipped records and engines without
-            # caption support.
-            "caption": getattr(engine_obj, "captions", {}).get(url),
-        }
-    )
 
 
 def _compute_eta(state: dict[str, float | int], done: int, total: int) -> float | None:
