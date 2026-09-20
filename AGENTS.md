@@ -8,15 +8,15 @@ repository. Read this before making non-trivial changes.
 - **What it is:** Python library + `bbid` CLI for bulk-downloading
   images from Bing or DuckDuckGo. The recommended way to use it as a
   library is the `Downloader` class (added in v3.2.0).
-- **Python:** 3.8+. Pure-stdlib HTTP (urllib), `brotli` for DuckDuckGo
+- **Python:** 3.9+. Pure-stdlib HTTP (urllib), `brotli` for DuckDuckGo
   (hard dep since v3.1.1), optional `selenium` for the legacy
   `multidownloader` path.
 - **CI**: `.github/workflows/test.yml` runs on every PR and push to
   `main` — pytest (network tests skipped), `ruff check`, and `mypy`
-  across Python 3.8 / 3.10 / 3.12. Run the same checks locally before
+  across Python 3.9–3.13. Run the same checks locally before
   pushing; `pre-commit` covers `black`/`ruff`/`mypy` on commit.
-- **Tests:** 149 passing, 2 network tests skipped by default
-  (`BBID_RUN_NETWORK_TESTS=1` to enable).
+- **Tests:** 268 collected (262 passing, 6 network/skipped by default;
+  `BBID_RUN_NETWORK_TESTS=1` to enable).
 - **Linters:** `black` (formatter), `ruff` (lint), `mypy` (types).
   All three run via pre-commit.
 
@@ -28,6 +28,8 @@ repository. Read this before making non-trivial changes.
 | `bing.py` | Bing image search engine (inherits from `base.ImageEngine`) | ✅ Yes |
 | `duckduckgo.py` | DuckDuckGo image search engine (inherits from `base.ImageEngine`) | ✅ Yes |
 | `manifest.py` | `ManifestWriter` JSONL writer (v3.5.0+). Reusable independently of `Downloader` | ✅ Yes |
+| `export.py` | `export_manifest()` — manifest to `url-list` / `parquet` (v3.10.0+) + `bbid export` wiring | ✅ Yes |
+| `mcp_server.py` | `bbid-mcp` stdio server exposing `search_images` (v3.10.0+, `[mcp]` extra) | ✅ Yes |
 | `downloader.py` | `Downloader` class, engine registry, lifecycle hooks. **v3.2.0+ entry point** | ✅ Yes |
 | `results.py` | `Result` and `ImageResult` value objects returned by `Downloader.search()` | ✅ Yes |
 | `download.py` | Module-level `downloader()` function (legacy wrapper around `Downloader`) and `bbid` CLI | ✅ Yes |
@@ -84,7 +86,7 @@ optional but useful (`feat(duckduckgo): add region code`).
 - **Minor** (3.x.0): new features, backwards-compatible.
 - **Major** (x.0.0): breaking changes.
 
-The current version is **3.5.1**. Bump in `pyproject.toml` and
+The current version is **3.11.0**. Bump in `pyproject.toml` and
 `CHANGELOG.md` when cutting a release. Releases are cut by:
 1. Committing on `main`.
 2. Tagging (`git tag -a v3.X.Y -m "v3.X.Y: summary"`).
