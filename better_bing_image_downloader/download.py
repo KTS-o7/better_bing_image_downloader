@@ -50,6 +50,7 @@ def downloader(
     manifest_flush_every: int = 1,
     min_dimension: int | None = None,
     proxy: str | None = None,
+    license: str = "any",
     **kwargs,
 ) -> int:
     """Download images matching ``query`` using the chosen search engine.
@@ -98,6 +99,11 @@ def downloader(
         Minimum width/height in pixels (v3.6.0+). Images smaller than
         this on either side are skipped. ``None`` (the default)
         disables the filter.
+    license : str
+        Bing license filter (Bing only, best-effort, not legal advice):
+        ``"any"`` (default), ``"public"``, ``"share"``,
+        ``"share_commercially"``, ``"modify"``,
+        ``"modify_commercially"``.
     proxy : str | None
         Optional ``http://`` / ``https://`` proxy URL (v3.8.0+). When
         set, every request (search page fetches and image downloads)
@@ -179,6 +185,7 @@ def downloader(
             manifest_fields=manifest_fields,
             manifest_flush_every=manifest_flush_every,
             min_dimension=min_dimension,
+            license=license,
         )
         # Preserve the v3.1.x contract: the legacy downloader()
         # function returns the engine's ``download_count``, which the
@@ -420,6 +427,13 @@ def main() -> None:
         help="Minimum width/height in pixels; smaller images are skipped (default: no filtering).",
     )
     parser.add_argument(
+        "--license",
+        type=str,
+        default="any",
+        choices=["any", "public", "share", "share_commercially", "modify", "modify_commercially"],
+        help="Bing license filter (Bing only; best-effort, not legal advice).",
+    )
+    parser.add_argument(
         "--proxy",
         type=str,
         default=None,
@@ -461,6 +475,7 @@ def main() -> None:
         manifest_flush_every=args.manifest_flush_every,
         min_dimension=args.min_dimension,
         proxy=args.proxy,
+        license=args.license,
     )
 
 

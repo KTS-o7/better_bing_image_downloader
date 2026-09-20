@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Bing license filter** (#63): new optional `license` parameter on
+  `Bing`, `Downloader.search()` / `search_async()`, `downloader()`, and
+  `--license` CLI flag (`any`, `public`, `share`, `share_commercially`,
+  `modify`, `modify_commercially`, mapping to Bing's
+  `filterui:license-L*` codes). Combines with `image_filter` in one
+  `qft`; provenance is recorded via manifest `source_page`. Bing-only —
+  DuckDuckGo ignores it. Best-effort, not legal advice.
+
 ## [3.10.0] - 2026-09-05
 
 ### Added
