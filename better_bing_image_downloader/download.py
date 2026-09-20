@@ -299,7 +299,11 @@ def main() -> None:
     if sys.argv[1:2] == ["export"]:
         _export_main(sys.argv[2:])
         return
-    parser = argparse.ArgumentParser(description="Download images using Bing or DuckDuckGo.")
+    parser = argparse.ArgumentParser(
+        description="Download images using Bing or DuckDuckGo.",
+        epilog="Also see: 'bbid export --help' to convert a manifest.jsonl "
+        "to url-list or parquet for ML pipelines.",
+    )
     try:
         _version = pkg_version("better-bing-image-downloader")
     except PackageNotFoundError:

@@ -216,3 +216,12 @@ def test_help_lists_caption_in_manifest_fields(monkeypatch, capsys) -> None:
         download.main()
     assert exc_info.value.code == 0
     assert "caption" in capsys.readouterr().out
+
+
+def test_help_mentions_export(monkeypatch, capsys) -> None:
+    """Top-level --help points at bbid export (#79)."""
+    monkeypatch.setattr(sys, "argv", ["bbid", "--help"])
+    with pytest.raises(SystemExit) as exc_info:
+        download.main()
+    assert exc_info.value.code == 0
+    assert "bbid export --help" in capsys.readouterr().out
