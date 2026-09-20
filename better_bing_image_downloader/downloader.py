@@ -29,6 +29,7 @@ import os
 import threading
 import time
 import urllib.request
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
@@ -436,6 +437,28 @@ class Downloader:
                 "safe_search": ddg_safe_search,
                 "region": ddg_region,
             }
+            # Bing-only options are silently ignored by DuckDuckGo — warn
+            # instead of dropping them quietly (#78). Custom engines fall
+            # through untouched.
+            bing_only = {
+                "image_filter": image_filter,
+                "mkt": mkt,
+                "license": license,
+                "adult_filter_off": adult_filter_off,
+            }
+            defaults = {
+                "image_filter": "",
+                "mkt": "en-US",
+                "license": "any",
+                "adult_filter_off": False,
+            }
+            for key, value in bing_only.items():
+                if value != defaults[key]:
+                    warnings.warn(
+                        f"{key}={value!r} is Bing-only and ignored " 'with engine="duckduckgo".',
+                        UserWarning,
+                        stacklevel=2,
+                    )
 
         # Pass the cancel token to the engine so cooperative engines
         # (Bing, DuckDuckGo) can abort between page fetches.
