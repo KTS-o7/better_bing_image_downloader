@@ -207,3 +207,12 @@ def test_cli_manifest_flush_every_reaches_writer(monkeypatch, tmp_path) -> None:
 
     records = _read_manifest(tmp_path / "red panda" / "manifest.jsonl")
     assert len(records) == 2
+
+
+def test_help_lists_caption_in_manifest_fields(monkeypatch, capsys) -> None:
+    """--help advertises caption as a valid --manifest-fields value (#77)."""
+    monkeypatch.setattr(sys, "argv", ["bbid", "--help"])
+    with pytest.raises(SystemExit) as exc_info:
+        download.main()
+    assert exc_info.value.code == 0
+    assert "caption" in capsys.readouterr().out
