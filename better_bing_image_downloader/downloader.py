@@ -337,6 +337,7 @@ class Downloader:
         manifest_fields: list[str] | None = None,
         manifest_flush_every: int = 1,
         min_dimension: int | None = None,
+        license: str = "any",
     ) -> Result:
         """Run a search and return a :class:`Result`.
 
@@ -428,6 +429,7 @@ class Downloader:
                 "adult": adult,
                 "filter": image_filter,
                 "mkt": mkt,
+                "license": license,
             }
         elif engine == "duckduckgo":
             engine_kwargs = {
@@ -737,6 +739,7 @@ class Downloader:
         manifest_fields: list[str] | None = None,
         manifest_flush_every: int = 1,
         min_dimension: int | None = None,
+        license: str = "any",
     ) -> Result:
         """Async wrapper around :meth:`search`.
 
@@ -791,6 +794,7 @@ class Downloader:
             manifest_fields=manifest_fields,
             manifest_flush_every=manifest_flush_every,
             min_dimension=min_dimension,
+            license=license,
         )
 
 

@@ -41,6 +41,10 @@ class Bing(ImageEngine):
         Optional Bing image-type filter shorthand
         (``"photo"``, ``"clipart"``, ``"line"``/``"linedrawing"``,
         ``"gif"``/``"animatedgif"``, ``"transparent"``).
+    license : str
+        Optional Bing license filter (``"any"`` default, ``"public"``,
+        ``"share"``, ``"share_commercially"``, ``"modify"``,
+        ``"modify_commercially"``). Bing-only, best-effort.
     verbose : bool
         Whether to print progress information.
     badsites : Iterable[str] | None
@@ -60,6 +64,26 @@ class Bing(ImageEngine):
     BACKOFF_FACTOR = 2.0
     BACKOFF_MAX = 60.0
 
+    # License filter mapping (issue #63). Values verified against
+    # hellock/icrawler's license_code dict + Microsoft's license-type docs:
+    # narrower permissions = fewer L codes (L2_L3 is strictest).
+    _LICENSE_MAP = {
+        "any": "",
+        "all": "",
+        "": "",
+        "public": "+filterui:license-L1",
+        "publicdomain": "+filterui:license-L1",
+        "public_domain": "+filterui:license-L1",
+        "share": "+filterui:license-L2_L3_L4_L5_L6_L7",
+        "share_commercially": "+filterui:license-L2_L3_L4",
+        "commercial": "+filterui:license-L2_L3_L4",
+        "modify": "+filterui:license-L2_L3_L5_L6",
+        "modify_noncommercial": "+filterui:license-L2_L3_L5_L6",
+        "noncommercial_modify": "+filterui:license-L2_L3_L5_L6",
+        "modify_commercially": "+filterui:license-L2_L3",
+        "commercial_modify": "+filterui:license-L2_L3",
+    }
+
     def __init__(
         self,
         query: str,
@@ -77,6 +101,7 @@ class Bing(ImageEngine):
         cancel=None,
         min_dimension: int | None = None,
         proxy: str | None = None,
+        license: str = "any",
     ):
         super().__init__(
             query=query,
@@ -95,6 +120,10 @@ class Bing(ImageEngine):
         self.adult = adult
         self.filter = filter
         self.mkt = mkt
+        # Validate eagerly so typos fail fast (mirrors image_filter leniency
+        # but license typos are a compliance risk, so raise instead).
+        self.get_license_filter(license)
+        self.license = license
         self._backoff = self.BACKOFF_INITIAL
         # Bing returns compressed responses; we must advertise support.
         self.headers = {
@@ -128,6 +157,39 @@ class Bing(ImageEngine):
         }
         return filters.get(shorthand, "")
 
+    def get_license_filter(self, shorthand: str | None = None) -> str:
+        """Convert license shorthand to a Bing ``+filterui:license-`` string.
+
+        Accepted values: ``any`` (default, no filter), ``public``,
+        ``share``, ``share_commercially``, ``modify``,
+        ``modify_commercially`` plus ``publicdomain``/``commercial`` aliases
+        and raw ``license-L*`` / ``licenseType-Any`` passthrough.
+        Unknown values raise ``ValueError``.
+        """
+        s = self.license if shorthand is None else shorthand
+        if s is None:
+            return ""
+        norm = s.strip().lower().replace("-", "_").replace(" ", "_")
+        if norm.startswith("+filterui:"):
+            frag = s.strip()[len("+filterui:") :]
+            if frag == "licenseType-Any" or frag.startswith("license-L"):
+                return "+filterui:" + frag
+            raise ValueError(f"Unknown license filter {s!r}")
+        if norm.startswith("license_") or norm.startswith("license-"):
+            raw = s.strip()
+            if raw.lower() == "licensetype-any":
+                return "+filterui:licenseType-Any"
+            if raw.startswith("license-L"):
+                return "+filterui:" + raw
+            raise ValueError(f"Unknown license filter {s!r}")
+        if norm == "licensetype_any":
+            return "+filterui:licenseType-Any"
+        try:
+            return self._LICENSE_MAP[norm]
+        except KeyError:
+            valid = "any, public, share, share_commercially, modify, modify_commercially"
+            raise ValueError(f"Unknown license {s!r}. Valid: {valid}") from None
+
     def _build_page_url(self, page_counter: int) -> str:
         """Construct the URL for a given results page (v3.5.0+).
 
@@ -147,6 +209,7 @@ class Bing(ImageEngine):
             + urllib.parse.quote_plus(self.mkt)
             + "&qft="
             + ("" if self.filter is None else self.get_filter(self.filter))
+            + self.get_license_filter()
         )
 
     def _fetch_page(self, page_counter: int) -> str:

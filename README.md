@@ -97,6 +97,7 @@ bbid "golden retriever" --limit 50 --engine duckduckgo
 
 - Direct API access via `https://www.bing.com/images/async`
 - Supports image-type filtering: `photo`, `clipart`, `line`/`linedrawing`, `gif`/`animatedgif`, `transparent`
+- Supports license filtering (`license` / `--license`): `any`, `public`, `share`, `share_commercially`, `modify`, `modify_commercially`
 - Supports market codes (`mkt`) for region-specific results
 - No additional dependencies
 
@@ -578,6 +579,7 @@ bbid "mountain landscape" --limit 100 --proxy http://proxy.example.com:8080
 | `force_replace` | bool | False | both | Delete existing dir before download |
 | `timeout` | int | 60 | both | Connection timeout in seconds |
 | `image_filter` | str | `""` | Bing | Image type: `line`, `photo`, `clipart`, `gif`, `transparent` |
+| `license` | str | `'any'` | Bing | License: `any`, `public`, `share`, `share_commercially`, `modify`, `modify_commercially` |
 | `verbose` | bool | True | both | Print download progress |
 | `badsites` | list | `[]` | both | Domains to exclude |
 | `name` | str | `'Image'` | both | Base filename prefix |
@@ -617,6 +619,28 @@ downloader(
     output_dir="logos",
 )
 ```
+
+### Building license-compliant datasets (Bing only)
+
+```bash
+bbid --license modify_commercially "cats" --limit 50
+```
+
+```python
+downloader(query="cats", limit=50, license="modify_commercially")
+```
+
+Values: `any` (default, no filtering), `public` (public domain, `license-L1`),
+`share` (`license-L2_L3_L4_L5_L6_L7`), `share_commercially`
+(`license-L2_L3_L4`), `modify` (`license-L2_L3_L5_L6`),
+`modify_commercially` (`license-L2_L3`, strictest). Combines with
+`image_filter` in a single Bing `qft` parameter; the exact `qft` URL is
+recorded in the manifest `source_page` field for provenance. DuckDuckGo has
+no equivalent — `license` is ignored there.
+
+> Caveat: Bing's license filter is best-effort metadata, not legal advice.
+> Always verify the license on the source page before training or
+> redistributing.
 
 ### Exclude stock photo sites
 
