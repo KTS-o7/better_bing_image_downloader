@@ -35,7 +35,8 @@ class TestRunSearchHelper:
 
         assert summary == {
             "count": 3,
-            "output_dir": "dataset/cats",
+            # str(Path) is platform-dependent (backslashes on Windows).
+            "output_dir": str(Path("dataset/cats")),
             "manifest_path": "dataset/cats/manifest.jsonl",
             "skipped": 1,
             "errors": 0,
