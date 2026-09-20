@@ -410,7 +410,7 @@ def main() -> None:
         default=None,
         help=(
             "Comma-separated list of manifest fields to include. "
-            "Valid: index,status,url,file,md5,error,engine,query,source_page,downloaded_at. "
+            "Valid: index,status,url,file,md5,error,engine,query,source_page,downloaded_at,caption. "
             "Default: all fields."
         ),
     )
