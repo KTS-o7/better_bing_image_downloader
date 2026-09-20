@@ -55,6 +55,20 @@ class TestRunSearchHelper:
         assert summary["manifest_path"] is None
         assert mock_search.call_args.kwargs["manifest"] is False
 
+    def test_license_and_min_dimension_forwarded(self, tmp_path) -> None:
+        """_run_search forwards license/min_dimension to search (#80)."""
+        with patch.object(
+            mcp_server.Downloader, "search", return_value=_fake_result()
+        ) as mock_search:
+            mcp_server._run_search(
+                "cats",
+                output_dir=str(tmp_path),
+                license="modify_commercially",
+                min_dimension=800,
+            )
+        assert mock_search.call_args.kwargs["license"] == "modify_commercially"
+        assert mock_search.call_args.kwargs["min_dimension"] == 800
+
     def test_sequential_calls_are_serialized_and_independent(self) -> None:
         """Two calls each construct a fresh Downloader and both succeed."""
         with patch.object(mcp_server, "Downloader") as mock_dl:
