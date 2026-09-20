@@ -10,11 +10,18 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        include:
+          # Windows portability gate (#85): the only recurring bug
+          # class (#51, #68) is Windows-specific CLI behavior, so one
+          # Windows job covers it without 5x-ing the matrix.
+          - os: windows-latest
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@v5
