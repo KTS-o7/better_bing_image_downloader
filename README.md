@@ -111,6 +111,26 @@ bbid "golden retriever" --limit 50 --engine duckduckgo
 
 DuckDuckGo is a great fallback when Bing is rate-limiting or blocking your IP, and vice versa.
 
+### Feature parity (spike notes, #84)
+
+DuckDuckGo's `i.js` endpoint exposes no server-side license, image-type,
+or market filters — only safe-search and region. So there is no DDG
+equivalent to map Bing's `license`, `image_filter`, or `mkt` onto; adding
+them would mean client-side guessing (e.g. license from the source page),
+which can't be trusted for compliance use. Verdict: **wontfix** — use
+`engine="bing"` when you need license/type/market filtering. Passing those
+options with `engine="duckduckgo"` now emits a `UserWarning` instead of
+being silently ignored.
+
+| Option | Bing | DuckDuckGo |
+|--------|------|------------|
+| `image_filter` / `--filter` | ✅ server-side `filterui` | ❌ no equivalent (wontfix) |
+| `license` / `--license` | ✅ server-side `filterui:license-*` | ❌ no equivalent (wontfix) |
+| `mkt` / `--mkt` | ✅ market code | ❌ use `ddg_region` instead |
+| `adult_filter_off` / `-a` | ✅ `adlt=off` | ❌ use `ddg_safe_search="off"` instead |
+| `min_dimension` / `--min-dimension` | ✅ post-download | ✅ post-download |
+| `proxy` / `--proxy` | ✅ | ✅ |
+
 ## Python API
 
 ```python
