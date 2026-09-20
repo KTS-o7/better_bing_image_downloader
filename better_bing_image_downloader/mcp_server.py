@@ -59,6 +59,8 @@ def _run_search(
     engine: str = "bing",
     output_dir: str = "dataset",
     manifest: bool = True,
+    license: str = "any",
+    min_dimension: int | None = None,
 ) -> dict:
     """Run one image search and return a JSON-serializable summary dict.
 
@@ -79,6 +81,8 @@ def _run_search(
             engine=engine,
             output_dir=output_dir,
             manifest=manifest,
+            license=license,
+            min_dimension=min_dimension,
         )
     summary = {
         "count": result.count,
@@ -117,6 +121,8 @@ def _build_server() -> FastMCP:
         engine: str = "bing",
         output_dir: str = "dataset",
         manifest: bool = True,
+        license: str = "any",
+        min_dimension: int | None = None,
     ) -> dict:
         """Search Bing or DuckDuckGo for images and download them to disk.
 
@@ -126,8 +132,12 @@ def _build_server() -> FastMCP:
             engine: Search engine to use: "bing" or "duckduckgo".
             output_dir: Base output directory; images land in
                 ``<output_dir>/<query>/``.
-            manifest: Write a JSONL ``manifest.jsonl` recording every
+            manifest: Write a JSONL ``manifest.json` recording every
                 attempted download (success or failure).
+            license: Bing license filter (e.g. "modify_commercially");
+                ignored by DuckDuckGo.
+            min_dimension: Skip images smaller than this many pixels
+                on either side.
 
         Returns:
             A summary dict with keys ``count``, ``output_dir``,
@@ -139,6 +149,8 @@ def _build_server() -> FastMCP:
             engine=engine,
             output_dir=output_dir,
             manifest=manifest,
+            license=license,
+            min_dimension=min_dimension,
         )
 
     return server
