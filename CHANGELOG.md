@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-09-20
+
+### Removed (breaking)
+
+- **Selenium path deleted** (#82): `crawler.py`, `multidownloader.py`,
+  `helperdownload.py`, and `utils.py` are gone, along with their tests.
+  The Google image path has not worked for years (JS-only shell page)
+  and was deprecated since 3.1.0. Use `engine="bing"` or
+  `engine="duckduckgo"` instead.
+- **Dropped `requests` dependency** — it was only used by the deleted
+  path. Core is now `tqdm` + `filetype` + `brotli`.
+- **Dropped the `[google]` extra** (`selenium`,
+  `chromedriver-autoinstaller`). Remaining extras: `[parquet]`, `[mcp]`.
+
 ## [3.11.0] - 2026-09-20
 
 ### Added

@@ -68,14 +68,14 @@ Configuration lives in `pyproject.toml` under `[tool.black]`,
 better_bing_image_downloader/
 ├── base.py             # ImageEngine ABC (download, dedup, resume, manifest, hooks)
 ├── bing.py             # Bing image search engine
-├── crawler.py          # [DEPRECATED] Selenium-based crawler (will be removed in v4)
+├── cancel.py           # CancelToken one-shot cancellation flag
 ├── download.py         # Legacy downloader() function and bbid CLI
 ├── downloader.py       # Downloader class — v3.2.0+ library entry point
 ├── duckduckgo.py       # DuckDuckGo image search engine
-├── helperdownload.py   # [DEPRECATED] Concurrent URL-list downloader
-├── multidownloader.py  # [DEPRECATED] Selenium-based CLI
+├── export.py           # Manifest export to url-list / parquet
+├── manifest.py         # ManifestWriter JSONL writer + search record helpers
+├── mcp_server.py       # bbid-mcp stdio server for LLM agents
 ├── results.py          # Result and ImageResult value objects
-├── utils.py            # [DEPRECATED] Config helpers
 └── py.typed            # PEP 561 marker — types are exported
 ```
 
