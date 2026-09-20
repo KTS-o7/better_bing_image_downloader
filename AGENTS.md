@@ -9,8 +9,7 @@ repository. Read this before making non-trivial changes.
   images from Bing or DuckDuckGo. The recommended way to use it as a
   library is the `Downloader` class (added in v3.2.0).
 - **Python:** 3.9+. Pure-stdlib HTTP (urllib), `brotli` for DuckDuckGo
-  (hard dep since v3.1.1), optional `selenium` for the legacy
-  `multidownloader` path.
+  (hard dep since v3.1.1).
 - **CI**: `.github/workflows/test.yml` runs on every PR and push to
   `main` — pytest (network tests skipped), `ruff check`, and `mypy`
   across Python 3.9–3.13. Run the same checks locally before
@@ -35,10 +34,6 @@ repository. Read this before making non-trivial changes.
 | `results.py` | `Result` and `ImageResult` value objects returned by `Downloader.search()` | ✅ Yes |
 | `download.py` | Module-level `downloader()` function (legacy wrapper around `Downloader`) and `bbid` CLI | ✅ Yes |
 | `__init__.py` | Public API surface — re-exports `Bing`, `DuckDuckGo`, `Downloader`, `ImageResult`, `Result`, `downloader` | ✅ Yes |
-| `crawler.py` | **DEPRECATED** Selenium-based crawler | ⚠️ Don't extend; remove in v4.0.0 |
-| `multidownloader.py` | **DEPRECATED** Selenium-based CLI | ⚠️ Don't extend; remove in v4.0.0 |
-| `helperdownload.py` | **DEPRECATED** Used by `multidownloader` | ⚠️ Don't extend; remove in v4.0.0 |
-| `utils.py` | **DEPRECATED** Config helpers | ⚠️ Don't extend; remove in v4.0.0 |
 | `pyproject.toml` | Package metadata, version, tool config | ✅ Yes (bump version on release) |
 | `requirements*.txt` | Mirror of `[project.optional-dependencies]` | ✅ Yes |
 | `tests/` | pytest test suite | ✅ Yes |
@@ -56,11 +51,11 @@ repository. Read this before making non-trivial changes.
    `_download_batch()` instead of duplicating the parallel-download
    logic.
 2. **TDD where possible.** The existing tests mock at module-attribute
-   boundaries (`urllib.request.urlopen`, `filetype.guess`,
-   `requests.get`). Follow the pattern in `tests/test_duckduckgo.py`.
+   boundaries (`urllib.request.urlopen`, `filetype.guess`).
+   Follow the pattern in `tests/test_duckduckgo.py`.
 3. **No new top-level dependencies** without discussion. The package
    has stayed stdlib-only for the Bing path; optional extras are
-   `[duckduckgo]` (brotli) and `[google]` (selenium).
+   `[parquet]` (pyarrow) and `[mcp]`.
 
 ### Test patterns
 
@@ -87,7 +82,7 @@ optional but useful (`feat(duckduckgo): add region code`).
 - **Minor** (3.x.0): new features, backwards-compatible.
 - **Major** (x.0.0): breaking changes.
 
-The current version is **3.11.0**. Bump in `pyproject.toml` and
+The current version is **4.0.0**. Bump in `pyproject.toml` and
 `CHANGELOG.md` when cutting a release. Releases are cut by:
 1. Committing on `main`.
 2. Tagging (`git tag -a v3.X.Y -m "v3.X.Y: summary"`).
@@ -99,24 +94,19 @@ The current version is **3.11.0**. Bump in `pyproject.toml` and
 
 - **Line length:** 100 (enforced by black + ruff).
 - **Type hints:** required on public API. `base.py`, `bing.py`,
-  `duckduckgo.py`, and `download.py` are typed; deprecated modules
-  are not.
+  `duckduckgo.py`, and `download.py` are typed.
 - **Docstrings:** Google-style or NumPy-style; the existing code mixes
   both. Match the style of the file you're editing.
-- **Logging:** use `logging`, never `print()`. The `helperdownload`
-  migration to `logging` was a deliberate fix; don't reintroduce
-  `print()` calls.
+- **Logging:** use `logging`, never `print()`.
 
 ## What NOT to do
 
 - **Don't reintroduce `print()` in library code.** It's a library; users
   may pipe stdout.
 - **Don't add Selenium or other browser-automation deps to the core.**
-  The Google path is dead; don't try to revive it.
+  The Google/Selenium path was removed in v4.0.0; don't try to revive it.
 - **Don't use `requests` for new code in `bing.py` or `duckduckgo.py`.**
-  They use `urllib.request` so the Bing path stays stdlib-only.
-  `helperdownload` (deprecated) uses `requests`; don't copy that
-  pattern into new code.
+  They use `urllib.request` so the core stays dependency-light.
 - **Don't silently change return types or signatures** on
   `downloader()`, `Bing`, or `DuckDuckGo`. Add a new parameter with a
   default value instead. New public types (`Result`, `ImageResult`)

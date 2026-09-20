@@ -37,7 +37,6 @@ A fast, reliable Python library and CLI tool for bulk downloading images from Bi
 - [CLI — bbid](#cli--bbid)
 - [Parameters](#parameters)
 - [Examples](#examples)
-- [Multidownloader (Deprecated)](#multidownloader-deprecated)
 - [Changelog](#changelog)
 - [Disclaimer](#disclaimer)
 - [License](#license)
@@ -46,12 +45,6 @@ A fast, reliable Python library and CLI tool for bulk downloading images from Bi
 
 ```bash
 pip install better-bing-image-downloader
-```
-
-For **Google/Selenium** (legacy, deprecated in 3.1.0) support:
-
-```bash
-pip install "better-bing-image-downloader[google]"
 ```
 
 Both Bing and DuckDuckGo engines work out of the box — no extra dependencies. The `brotli` package (used to decode DuckDuckGo's Brotli-compressed responses) is a hard runtime dependency as of 3.1.1.
@@ -698,22 +691,6 @@ downloader("mountain landscape", limit=500, output_dir="dataset")
 
 # Run 2: pick up where we left off — only the missing images are fetched
 downloader("mountain landscape", limit=500, output_dir="dataset")
-```
-
-## Multidownloader (Deprecated)
-
-The Selenium-based `multidownloader` CLI is **deprecated** and will be removed in v4.0.0. The Google path no longer works: Google serves a JavaScript-only shell page to all non-browser HTTP requests, so image URLs cannot be extracted without a real browser.
-
-For the Bing path, prefer the new `bbid` CLI or `downloader()` function with `engine="bing"`. As a DuckDuckGo alternative, use `bbid --engine duckduckgo` (or `engine="duckduckgo"` in Python).
-
-If you have a hard requirement on the Selenium path, you can still import it directly, but expect a `DeprecationWarning`:
-
-```python
-import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-from better_bing_image_downloader.multidownloader import main
-main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
 
 ## Changelog
