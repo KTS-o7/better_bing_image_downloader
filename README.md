@@ -555,6 +555,7 @@ bbid "mountain landscape" --limit 100 --proxy http://proxy.example.com:8080
 | `--force_replace` | `-F` | False | Delete and recreate output dir |
 | `--timeout` | `-t` | 60 | Connection timeout (seconds) |
 | `--filter` | `-f` | `""` | Image type filter (Bing only) |
+| `--license` | | `any` | License filter: `any`, `public`, `share`, `share_commercially`, `modify`, `modify_commercially` (Bing only) |
 | `--verbose` | `-v` | False | Detailed output |
 | `--bad-sites` | `-b` | `[]` | Sites to exclude |
 | `--name` | `-n` | `Image` | Base filename prefix |
@@ -562,8 +563,15 @@ bbid "mountain landscape" --limit 100 --proxy http://proxy.example.com:8080
 | `--mkt` | `-m` | `en-US` | Bing market code (Bing only) |
 | `--ddg-safe-search` | | `moderate` | DuckDuckGo safe-search: `strict`, `moderate`, `off` |
 | `--ddg-region` | | `us-en` | DuckDuckGo region code |
+| `--manifest` | | False | Write a JSONL `manifest.jsonl` per download attempt |
+| `--manifest-path` | | `None` | Override manifest output path |
+| `--manifest-fields` | | `None` | Comma-separated manifest fields to include |
+| `--manifest-flush-every` | | 1 | Flush manifest to disk every N records |
+| `--min-dimension` | | `None` | Skip images smaller than N px on either side |
 | `--proxy` | | `None` | HTTP/HTTPS proxy URL for all requests (e.g. `http://proxy:8080`) |
 | `--version` | | | Show version and exit |
+
+`bbid export --format url-list|parquet --manifest <path> --dest <path>` exports a manifest to ML-pipeline formats (see "Manifest export" below).
 
 ## Parameters
 
@@ -587,6 +595,13 @@ bbid "mountain landscape" --limit 100 --proxy http://proxy.example.com:8080
 | `mkt` | str | `'en-US'` | Bing | Market code for language/region |
 | `ddg_safe_search` | str | `'moderate'` | DuckDuckGo | `strict`, `moderate`, or `off` |
 | `ddg_region` | str | `'us-en'` | DuckDuckGo | Region code (e.g. `us-en`, `uk-en`) |
+| `manifest` | bool | False | both | Write JSONL `manifest.jsonl` per attempt |
+| `manifest_path` | str \| None | `None` | both | Override manifest output path |
+| `manifest_fields` | list \| None | `None` | both | Manifest field subset to include |
+| `manifest_flush_every` | int | 1 | both | Flush manifest every N records |
+| `min_dimension` | int \| None | `None` | both | Skip images smaller than N px per side |
+| `proxy` | str \| None | `None` | both | HTTP/HTTPS proxy URL |
+| `cancel` | CancelToken \| None | `None` | both | Abort a running search from another thread |
 
 ## Examples
 
@@ -682,6 +697,36 @@ main(["query", "--engine", "Bing", "--driver", "firefox_headless"])
 ```
 
 ## Changelog
+
+### 3.11.0 (Bing license filter)
+
+- **New:** `license` parameter (`any`, `public`, `share`, `share_commercially`, `modify`, `modify_commercially`) on `Bing`, `Downloader.search()`, `downloader()`, and `--license` CLI flag — maps to Bing's `filterui:license-L*` codes, combines with `image_filter` in one `qft`
+
+### 3.10.0 (endpoint-drift canary + manifest export + MCP)
+
+- **New:** endpoint-drift warning when a page fetches but yields zero links, plus golden-file parser tests and a weekly canary workflow
+- **New:** `export_manifest()` / `bbid export` — manifest to `url-list` (img2dataset-compatible) or `parquet`
+- **New:** `bbid-mcp` server exposing a `search_images` tool for LLM agents
+
+### 3.9.0 (captions)
+
+- **New:** image captions (result titles) captured per URL; `caption` manifest field and `ImageResult.caption` for image–text pairs
+
+### 3.8.1 (manifest polish)
+
+- **Changed:** legacy `_manifest.json` deprecated (removal in v4.0.0); use JSONL manifest instead
+
+### 3.8.0 (proxy)
+
+- **New:** `proxy` parameter on `Downloader`, engines, and `bbid --proxy` — route all requests through an HTTP/HTTPS proxy
+
+### 3.7.x (CI + registry)
+
+- **New:** GitHub Actions test matrix (3.9/3.10/3.12, now 3.9–3.13); per-instance engine registry
+
+### 3.6.0 (min_dimension)
+
+- **New:** `min_dimension` filter — skip images smaller than N px per side; counted in `Result.skipped`, recorded as manifest `skipped` records
 
 ### 3.5.0 (JSONL manifest export)
 
