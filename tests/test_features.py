@@ -1,4 +1,3 @@
-import json
 from unittest.mock import MagicMock, patch
 
 from better_bing_image_downloader.bing import Bing
@@ -39,12 +38,10 @@ class TestResumeSupport:
 
 
 class TestManifest:
-    def test_manifest_written_after_downloader_run(self, tmp_path):
-        """downloader() should write _manifest.json after a run"""
+    def test_no_legacy_manifest_after_downloader_run(self, tmp_path):
+        """downloader() must not write _manifest.json (removed in v5.0.0)."""
         mock_cls = _build_mock_engine_cls(0)
         mock_instance = mock_cls.return_value
-        # Pre-populate the engine's manifest so the legacy downloader
-        # can write it out to disk on the way through.
         mock_instance.manifest = {"Image_1.jpg": "http://example.com/img.jpg"}
 
         with patch.object(
@@ -54,33 +51,7 @@ class TestManifest:
         ):
             downloader("cats", limit=1, output_dir=str(tmp_path))
 
-        manifest_path = tmp_path / "cats" / "_manifest.json"
-        assert manifest_path.exists(), "_manifest.json should be created"
-        data = json.loads(manifest_path.read_text())
-        assert "Image_1.jpg" in data
-        assert data["Image_1.jpg"] == "http://example.com/img.jpg"
-
-    def test_manifest_merges_with_existing(self, tmp_path):
-        """Successive runs should merge manifests, not overwrite"""
-        query_dir = tmp_path / "cats"
-        query_dir.mkdir()
-        existing_manifest = {"Image_1.jpg": "http://example.com/1.jpg"}
-        (query_dir / "_manifest.json").write_text(json.dumps(existing_manifest))
-
-        mock_cls = _build_mock_engine_cls(0)
-        mock_instance = mock_cls.return_value
-        mock_instance.manifest = {"Image_2.jpg": "http://example.com/2.jpg"}
-
-        with patch.object(
-            Downloader,
-            "_DEFAULT_REGISTRY",
-            {"bing": mock_cls, "duckduckgo": mock_cls},
-        ):
-            downloader("cats", limit=1, output_dir=str(tmp_path))
-
-        data = json.loads((query_dir / "_manifest.json").read_text())
-        assert "Image_1.jpg" in data  # old entry preserved
-        assert "Image_2.jpg" in data  # new entry added
+        assert not (tmp_path / "cats" / "_manifest.json").exists()
 
 
 def _build_mock_engine_cls(num_downloads: int):

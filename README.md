@@ -695,6 +695,10 @@ downloader("mountain landscape", limit=500, output_dir="dataset")
 
 ## Changelog
 
+### 5.0.0 (legacy manifest removal)
+
+- **Breaking:** `downloader()` no longer writes `_manifest.json` (deprecated since 3.8.1) — use the JSONL manifest + `bbid export`
+
 ### 4.0.1 (search refactor)
 
 - **Changed:** internal only, no behavior change — `Downloader.search()` split into a `_SearchSession` plus small helpers; engines report saves via an explicit `Collector` protocol instead of monkey-patching

@@ -12,7 +12,6 @@ New code should prefer :class:`Downloader` directly: it gives you a
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import shutil
 import sys
@@ -196,8 +195,7 @@ def downloader(
         # exposes the engine's view for backwards compatibility.
         eng = result.engine_instance()
         # Surface the manifest path (v3.5.0+) so users can find the
-        # JSONL file from a CLI run. Mirrors the v3.1.x _manifest.json
-        # behaviour but in the new format.
+        # JSONL file from a CLI run.
         if getattr(result, "manifest_path", None):
             logging.info("Wrote manifest to %s", result.manifest_path)
         if eng is not None:
@@ -206,50 +204,6 @@ def downloader(
     finally:
         if pbar_cm is not None:
             pbar_cm.close()
-        # v3.1.x also wrote a _manifest.json file at the end. We
-        # preserve that for any tooling that depends on it.
-        _write_legacy_manifest(image_dir, result if "result" in locals() else None)
-
-
-def _write_legacy_manifest(image_dir: Path, result) -> None:
-    """Write the v3.1.x-style _manifest.json. Best-effort, never raises.
-
-    .. deprecated:: 3.8.1
-        The ``_manifest.json`` file is deprecated and will be removed in
-        v4.0.0. Use the JSONL ``manifest.jsonl`` export instead
-        (``manifest=True``).
-    """
-    warnings.warn(
-        "The _manifest.json file written by downloader() is deprecated and "
-        "will be removed in v4.0.0. Use the JSONL manifest instead: "
-        "downloader(..., manifest=True) or "
-        "Downloader().search(..., manifest=True).",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    try:
-        existing: dict = {}
-        manifest_path = image_dir / "_manifest.json"
-        if manifest_path.exists():
-            try:
-                with open(manifest_path) as f:
-                    existing = json.load(f)
-            except Exception:
-                pass
-        if result is not None:
-            # Include both the engine's view (filename -> source_url,
-            # preserved from v3.1.x) and the Result's view (from the
-            # hook-observed save events). They are usually identical,
-            # but merging keeps the legacy contract intact.
-            engine = getattr(result, "_engine", None)
-            if engine is not None and getattr(engine, "manifest", None):
-                existing.update(engine.manifest)
-            for img in result.images:
-                existing[img.path.name] = img.source_url
-        with open(manifest_path, "w") as f:
-            json.dump(existing, f, indent=2)
-    except Exception as e:
-        logging.error("Failed to write manifest: %s", e)
 
 
 def _export_main(argv: list[str]) -> None:
