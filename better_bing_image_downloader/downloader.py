@@ -138,21 +138,23 @@ class _SearchSession:
             "_last_time": time.monotonic(),
             "_last_count": 0,
         }
-        self._original_save_raising = engine_obj._save_image_raising
-        self._original_download = engine_obj.download_image
 
     def install(self) -> None:
-        """Monkey-patch the engine to route saves through this session."""
-        # ``save_image`` lives on the base class, so attribute
-        # assignment is legal Python but mypy flags it — suppress
-        # only the method-assign warning.
-        self._engine_obj.save_image = self.save_with_hooks  # type: ignore[method-assign]
-        self._engine_obj.download_image = self.download_with_count  # type: ignore[method-assign]
+        """Wire this session as the engine's save-event collector.
 
-    def download_with_count(self, link: str, index: int):
-        """Count every candidate, then delegate to the real download."""
+        Replaces the pre-4.1.0 monkey-patching of ``save_image`` /
+        ``download_image``: the base ``download_image`` pipeline calls
+        back into ``note_candidate`` / ``save_with_hooks`` explicitly.
+        """
+        self._engine_obj.collector = self
+
+    def uninstall(self) -> None:
+        """Detach from the engine so no session outlives its run."""
+        self._engine_obj.collector = None
+
+    def note_candidate(self) -> None:
+        """Record one considered candidate URL (including resume-skips)."""
         self.download_image_calls += 1
-        return self._original_download(link, index)
 
     def save_with_hooks(self, link: str, file_path) -> bool:
         """Save one image, recording success/skip/error and firing hooks."""
@@ -161,7 +163,7 @@ class _SearchSession:
             # ``_save_image_raising`` returns the MD5 hex digest of the
             # saved bytes; the legacy wrapper does not, hence the
             # raising variant here.
-            file_md5 = self._original_save_raising(link, file_path)
+            file_md5 = self._engine_obj._save_image_raising(link, file_path)
         except BelowMinDimension as exc:
             return self._record_skip(link, exc)
         except (ImageSaveError, Exception) as exc:
@@ -644,9 +646,9 @@ class Downloader:
         try:
             engine_obj.run()
         finally:
-            # Always close the manifest writer, even on exception.
-            # The writer is idempotent, so a second close (e.g. if
-            # the search raises after a successful run) is a no-op.
+            # Detach the session and close the manifest writer, even on
+            # exception. Both are idempotent.
+            session.uninstall()
             if manifest_writer is not None:
                 manifest_writer.close()
 
