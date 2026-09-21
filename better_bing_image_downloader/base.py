@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Protocol
 
 import filetype
 
@@ -36,6 +37,24 @@ __all__ = [
 
 # How long a single parallel download future may block before we give up.
 MAX_FUTURE_TIMEOUT = 180.0  # seconds
+
+
+class Collector(Protocol):
+    """Save-event sink for one search run (v4.1.0+).
+
+    ``Downloader.search`` sets ``engine.collector`` to its per-run
+    session instead of monkey-patching ``save_image``. Structural
+    typing: any object with these two methods qualifies, so custom
+    collectors work without importing this module.
+    """
+
+    def note_candidate(self) -> None:
+        """Record one considered candidate URL (including resume-skips)."""
+        ...
+
+    def save_with_hooks(self, link: str, file_path) -> bool:
+        """Save one image, recording success/skip/error. Returns success."""
+        ...
 
 
 class ImageSaveError(Exception):
@@ -367,6 +386,13 @@ class ImageEngine(ABC):
         # ``ImageResult.caption`` and the manifest ``caption`` field.
         # Empty for engines that don't surface captions.
         self.captions: dict[str, str] = {}
+        # ``collector`` (v4.1.0+): optional save-event sink (see
+        # :class:`Collector`). ``Downloader.search`` sets this to its
+        # per-run session instead of monkey-patching ``save_image`` /
+        # ``download_image``. ``None`` (the default) keeps the legacy
+        # direct path, so custom engines and existing ``save_image``
+        # patches behave exactly as before.
+        self.collector: Collector | None = None
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -552,6 +578,11 @@ class ImageEngine(ABC):
             ``index`` on success, ``0`` if the file already existed (resume
             skip), or ``None`` on any error.
         """
+        # Count every candidate up front — including resume-skips below —
+        # so callers can distinguish "backend returned nothing" from
+        # "everything was skipped".
+        if self.collector is not None:
+            self.collector.note_candidate()
         try:
             path = urllib.parse.urlsplit(link).path
             filename = posixpath.basename(path).split("?")[0]
@@ -576,7 +607,13 @@ class ImageEngine(ABC):
             if self.verbose:
                 logging.info("Downloading Image #%d from %s", index, link)
 
-            if self.save_image(link, file_path):
+            # Collector path (v4.1.0+): the Downloader session observes
+            # the save; counters below update exactly as in the direct
+            # path so engine statistics stay consistent.
+            saver = (
+                self.collector.save_with_hooks if self.collector is not None else self.save_image
+            )
+            if saver(link, file_path):
                 with self._count_lock:
                     self.manifest[file_path.name] = link
                 if self.verbose:
