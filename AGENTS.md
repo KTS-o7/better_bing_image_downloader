@@ -14,7 +14,7 @@ repository. Read this before making non-trivial changes.
   `main` — pytest (network tests skipped), `ruff check`, and `mypy`
   across Python 3.9–3.13. Run the same checks locally before
   pushing; `pre-commit` covers `black`/`ruff`/`mypy` on commit.
-- **Tests:** 268 collected (262 passing, 6 network/skipped by default;
+- **Tests:** 267 collected (261 passing, 6 network/skipped by default;
   `BBID_RUN_NETWORK_TESTS=1` to enable).
 - **Linters:** `black` (formatter), `ruff` (lint), `mypy` (types).
   All three run via pre-commit.
