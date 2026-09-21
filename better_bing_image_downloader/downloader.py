@@ -88,6 +88,180 @@ HookOnEngineDone = Callable[[str, Result], None]  # (engine, result)
 HookOnProgress = Callable[[float, int, int, Optional[float]], None]
 
 
+def _fire_hook(hook, *args) -> None:
+    """Invoke a user hook without ever letting it break the run."""
+    if hook is not None:
+        try:
+            hook(*args)
+        except Exception:
+            logging.exception("hook raised; continuing")
+
+
+class _SearchSession:
+    """Per-search mutable state and engine hook wiring for one ``search()`` call.
+
+    Extracted from ``Downloader.search`` so the method stays an
+    orchestration outline. One instance lives exactly as long as one
+    ``search()`` invocation: it owns the result lists, counters, and
+    the monkey-patched ``save_image``/``download_image`` wrappers, then
+    builds the final :class:`Result`.
+    """
+
+    def __init__(
+        self,
+        downloader: Downloader,
+        engine_obj: ImageEngine,
+        engine: str,
+        query: str,
+        limit: int,
+        manifest_ctx: _ManifestContext | None,
+    ) -> None:
+        self._dl = downloader
+        self._engine_obj = engine_obj
+        self._engine = engine
+        self._query = query
+        self._limit = limit
+        self._manifest_ctx = manifest_ctx
+        self.images: list[ImageResult] = []
+        self.errors: list[tuple[str, BaseException]] = []
+        self._seen_paths: set[Path] = set()
+        # Counts every candidate the engine considered (including
+        # resume-skips), distinguishing "backend returned nothing"
+        # from "everything was skipped or failed".
+        self.download_image_calls = 0
+        self.save_attempts = 0
+        # Too-small images are an intentional filter outcome, not a
+        # failure, so they get their own counter for Result.skipped.
+        self.min_dimension_skips = 0
+        self._progress_state: dict[str, float | int] = {
+            "_start_time": time.monotonic(),
+            "_last_time": time.monotonic(),
+            "_last_count": 0,
+        }
+        self._original_save_raising = engine_obj._save_image_raising
+        self._original_download = engine_obj.download_image
+
+    def install(self) -> None:
+        """Monkey-patch the engine to route saves through this session."""
+        # ``save_image`` lives on the base class, so attribute
+        # assignment is legal Python but mypy flags it — suppress
+        # only the method-assign warning.
+        self._engine_obj.save_image = self.save_with_hooks  # type: ignore[method-assign]
+        self._engine_obj.download_image = self.download_with_count  # type: ignore[method-assign]
+
+    def download_with_count(self, link: str, index: int):
+        """Count every candidate, then delegate to the real download."""
+        self.download_image_calls += 1
+        return self._original_download(link, index)
+
+    def save_with_hooks(self, link: str, file_path) -> bool:
+        """Save one image, recording success/skip/error and firing hooks."""
+        self.save_attempts += 1
+        try:
+            # ``_save_image_raising`` returns the MD5 hex digest of the
+            # saved bytes; the legacy wrapper does not, hence the
+            # raising variant here.
+            file_md5 = self._original_save_raising(link, file_path)
+        except BelowMinDimension as exc:
+            return self._record_skip(link, exc)
+        except (ImageSaveError, Exception) as exc:
+            return self._record_error(link, exc)
+        return self._record_success(link, file_path, file_md5)
+
+    def _manifest_append(self, status: str, url: str, file_path, md5, error) -> None:
+        if self._manifest_ctx is not None:
+            _append_manifest_record(
+                self._manifest_ctx,
+                status=status,
+                url=url,
+                file_path=file_path,
+                md5=md5,
+                error=error,
+                engine_obj=self._engine_obj,
+            )
+
+    def _record_skip(self, link: str, exc: BaseException) -> bool:
+        self.min_dimension_skips += 1
+        self._manifest_append("skipped", link, None, None, exc)
+        return False
+
+    def _record_error(self, link: str, exc: BaseException) -> bool:
+        self.errors.append((link, exc))
+        _fire_hook(self._dl.on_error, link, exc)
+        self._manifest_append("error", link, None, None, exc)
+        return False
+
+    def _record_success(self, link: str, file_path, file_md5: str) -> bool:
+        fp = Path(file_path)
+        if fp in self._seen_paths:
+            return True
+        self._seen_paths.add(fp)
+        ir = self._make_image_result(link, fp)
+        self.images.append(ir)
+        _fire_hook(self._dl.on_image, ir)
+        self._fire_progress()
+        self._manifest_append("ok", link, fp, file_md5, None)
+        return True
+
+    @staticmethod
+    def _file_size(fp: Path) -> int:
+        try:
+            return fp.stat().st_size
+        except OSError:
+            return 0
+
+    def _make_image_result(self, link: str, fp: Path) -> ImageResult:
+        """Build the value object for a freshly saved file (no side effects)."""
+        return ImageResult(
+            path=fp,
+            source_url=link,
+            engine=self._engine,
+            query=self._query,
+            image_index=self._engine_obj.download_count,  # set by save_image
+            size_bytes=self._file_size(fp),
+            mime_type=_guess_mime(fp),  # extension-based; content validated on save
+            caption=getattr(self._engine_obj, "captions", {}).get(link),
+        )
+
+    def _fire_progress(self) -> None:
+        if self._dl.on_progress is None:
+            return
+        # ``download_count`` is incremented inside ``download_image``
+        # *after* ``save_image`` returns, so add 1 for the image just saved.
+        done = self._engine_obj.download_count + 1
+        total = self._limit
+        pct = (done / total * 100.0) if total > 0 else 0.0
+        eta = _compute_eta(self._progress_state, done, total)
+        _fire_hook(self._dl.on_progress, pct, done, total, eta)
+
+    def build_result(
+        self,
+        image_dir: Path,
+        manifest_abs_path: str | None,
+        cancel: CancelToken | None,
+    ) -> Result:
+        """Assemble the final :class:`Result` and fire ``on_engine_done``."""
+        skipped = (
+            max(0, self._engine_obj._slots_used - self._engine_obj.download_count)
+            + self.min_dimension_skips
+        )
+        result = Result(
+            query=self._query,
+            engine=self._engine,
+            output_dir=image_dir,
+            images=self.images,
+            skipped=skipped,
+            errors=self.errors,
+            no_results_found=self.download_image_calls == 0,
+            cancelled=cancel is not None and cancel.cancelled,
+            manifest_path=manifest_abs_path,
+        )
+        # Expose the engine for the legacy ``downloader()`` contract.
+        result._engine = self._engine_obj
+        _fire_hook(self._dl.on_engine_done, self._engine, result)
+        return result
+
+
 class Downloader:
     """Embeddable façade for image-search engines.
 
@@ -261,6 +435,88 @@ class Downloader:
 
     # --- Search entry point ---
 
+    @staticmethod
+    def _open_manifest(
+        image_dir: Path,
+        engine: str,
+        query: str,
+        manifest: bool,
+        manifest_path: str | os.PathLike | None,
+        manifest_fields: list[str] | None,
+        manifest_flush_every: int,
+    ) -> tuple[ManifestWriter | None, _ManifestContext | None, str | None]:
+        """Create the manifest writer triple, or all-``None`` when disabled.
+
+        The writer is opened up front so it can receive records from the
+        very first image attempt; the caller must ``close()`` it in a
+        ``finally``. State is invocation-local (never on ``self``) so
+        nested or concurrent ``search()`` calls never share a writer.
+        """
+        if not manifest:
+            return None, None, None
+        resolved = Path(manifest_path) if manifest_path else image_dir / "manifest.jsonl"
+        writer = ManifestWriter(
+            resolved,
+            fields=manifest_fields,
+            flush_every=manifest_flush_every,
+        )
+        return writer, _ManifestContext(writer, engine, query), str(resolved.resolve())
+
+    def _engine_kwargs_for(
+        self,
+        engine: str,
+        adult: str,
+        image_filter: str,
+        mkt: str,
+        license: str,
+        ddg_safe_search: str,
+        ddg_region: str,
+        adult_filter_off: bool,
+        cancel: CancelToken | None,
+        min_dimension: int | None,
+    ) -> dict[str, object]:
+        """Assemble engine constructor kwargs, warning on ignored options."""
+        kwargs: dict[str, object] = {}
+        if engine == "bing":
+            kwargs = {
+                "adult": adult,
+                "filter": image_filter,
+                "mkt": mkt,
+                "license": license,
+            }
+        elif engine == "duckduckgo":
+            kwargs = {
+                "safe_search": ddg_safe_search,
+                "region": ddg_region,
+            }
+            # Bing-only options are silently ignored by DuckDuckGo — warn
+            # instead of dropping them quietly (#78). Custom engines fall
+            # through untouched.
+            for key, value, default in (
+                ("image_filter", image_filter, ""),
+                ("mkt", mkt, "en-US"),
+                ("license", license, "any"),
+                ("adult_filter_off", adult_filter_off, False),
+            ):
+                if value != default:
+                    warnings.warn(
+                        f"{key}={value!r} is Bing-only and ignored " 'with engine="duckduckgo".',
+                        UserWarning,
+                        # warn() <- _engine_kwargs_for <- search <-
+                        # user code: point at the search() call site.
+                        stacklevel=3,
+                    )
+        # Optional keys are only added when used, so engines that don't
+        # accept them (e.g. third-party ones ignoring a feature) are
+        # unaffected.
+        if cancel is not None:
+            kwargs["cancel"] = cancel
+        if min_dimension is not None:
+            kwargs["min_dimension"] = min_dimension
+        if self.proxy is not None:
+            kwargs["proxy"] = self.proxy
+        return kwargs
+
     def search(
         self,
         query: str,
@@ -341,93 +597,28 @@ class Downloader:
 
         adult = "off" if adult_filter_off else "moderate"
 
-        # --- Manifest writer (v3.5.0+) ---
-        # Constructed here so it is open and ready to receive
-        # records from the very first image attempt. Wrapped in
-        # try/finally below to guarantee ``close()`` is called
-        # even on exception. The writer and its metadata live in an
-        # invocation-local :class:`_ManifestContext` (not on ``self``)
-        # so nested ``search()`` calls from hooks, or concurrent
-        # searches on the same ``Downloader``, each get their own
-        # writer and 1-based record counter.
-        manifest_writer: ManifestWriter | None = None
-        manifest_abs_path: str | None = None
-        if manifest:
-            resolved_manifest_path = (
-                Path(manifest_path) if manifest_path else image_dir / "manifest.jsonl"
-            )
-            manifest_writer = ManifestWriter(
-                resolved_manifest_path,
-                fields=manifest_fields,
-                flush_every=manifest_flush_every,
-            )
-            manifest_abs_path = str(resolved_manifest_path.resolve())
-        # Invocation-local manifest context, closed over by the
-        # success/error/skip hooks below.
-        manifest_ctx: _ManifestContext | None = (
-            _ManifestContext(manifest_writer, engine, query)
-            if manifest_writer is not None
-            else None
+        manifest_writer, manifest_ctx, manifest_abs_path = self._open_manifest(
+            image_dir,
+            engine,
+            query,
+            manifest,
+            manifest_path,
+            manifest_fields,
+            manifest_flush_every,
         )
 
-        engine_kwargs: dict[str, object] = {}
-        if engine == "bing":
-            engine_kwargs = {
-                "adult": adult,
-                "filter": image_filter,
-                "mkt": mkt,
-                "license": license,
-            }
-        elif engine == "duckduckgo":
-            engine_kwargs = {
-                "safe_search": ddg_safe_search,
-                "region": ddg_region,
-            }
-            # Bing-only options are silently ignored by DuckDuckGo — warn
-            # instead of dropping them quietly (#78). Custom engines fall
-            # through untouched.
-            bing_only = {
-                "image_filter": image_filter,
-                "mkt": mkt,
-                "license": license,
-                "adult_filter_off": adult_filter_off,
-            }
-            defaults = {
-                "image_filter": "",
-                "mkt": "en-US",
-                "license": "any",
-                "adult_filter_off": False,
-            }
-            for key, value in bing_only.items():
-                if value != defaults[key]:
-                    warnings.warn(
-                        f"{key}={value!r} is Bing-only and ignored " 'with engine="duckduckgo".',
-                        UserWarning,
-                        stacklevel=2,
-                    )
-
-        # Pass the cancel token to the engine so cooperative engines
-        # (Bing, DuckDuckGo) can abort between page fetches.
-        if cancel is not None:
-            engine_kwargs["cancel"] = cancel
-        # ``min_dimension`` (v3.6.0+) flows through ``engine_kwargs``
-        # like every other option, the same way ``cancel`` does.
-        # Bing and DuckDuckGo accept it in their own constructors and
-        # forward it via ``super().__init__()``; custom engines that
-        # don't override ``__init__`` inherit support for it directly
-        # from ``ImageEngine``. As with ``cancel``, we only add the
-        # key when it's actually used so engines that don't accept it
-        # (and don't use the feature) are unaffected.
-        if min_dimension is not None:
-            engine_kwargs["min_dimension"] = min_dimension
-
-        # ``proxy`` (v3.8.0+) is set once at ``Downloader`` construction
-        # (a single instance has one proxy for its lifetime, matching
-        # the cookie-jar/opener model). Forward it to the engine so it
-        # can build its own proxied opener; see the note above about
-        # only adding the key when it's actually used.
-        if self.proxy is not None:
-            engine_kwargs["proxy"] = self.proxy
+        engine_kwargs = self._engine_kwargs_for(
+            engine,
+            adult,
+            image_filter,
+            mkt,
+            license,
+            ddg_safe_search,
+            ddg_region,
+            adult_filter_off,
+            cancel,
+            min_dimension,
+        )
 
         engine_obj = self.build_engine(
             engine_name=engine,
@@ -443,195 +634,12 @@ class Downloader:
             **engine_kwargs,
         )
 
-        # Wire hooks: the engine records every successful save into
-        # ``manifest`` and increments ``download_count`` / ``_slots_used``.
-        # We tap the same counters to drive ``Result.images`` and fire
-        # the user's ``on_image`` callback.
-        if self.on_engine_start:
-            try:
-                self.on_engine_start(engine, query)
-            except Exception:  # never let a user hook break the run
-                logging.exception("on_engine_start hook raised; continuing")
-
-        images: list[ImageResult] = []
-        errors: list[tuple[str, BaseException]] = []
-        seen_paths: set[Path] = set()
-        # ``download_image_calls`` counts every time the engine
-        # asked ``download_image`` to consider a candidate. We use
-        # this to distinguish "no candidates fetched" from
-        # "all candidates skipped" — both report ``_slots_used == 0``
-        # but only the former means the search backend returned
-        # nothing. (Resume-skip paths in download_image return
-        # 0 before save_image is called, so save_attempts alone
-        # would conflate the two cases.)
-        download_image_calls = 0
-        # ``save_attempts`` is the number of times save_image was
-        # actually invoked (not skipped due to resume). Useful for
-        # debugging.
-        save_attempts = 0
-        # ``min_dimension_skips`` (v3.6.0+) counts images rejected by
-        # the ``min_dimension`` filter. Unlike other ``ImageSaveError``
-        # subclasses, these don't go into ``errors`` — they're an
-        # intentional filter outcome, not a failure — so they need
-        # their own counter to feed into ``Result.skipped`` below.
-        min_dimension_skips = 0
-        # ``progress_state`` tracks timing samples for ETA
-        # computation. We need at least 2 samples (one for the
-        # previous download, one for the current) to extrapolate.
-        # ``_start_time`` is the time of the first sample,
-        # ``_last_time`` is the time of the most recent sample,
-        # ``_last_count`` is the ``download_count`` at the time of
-        # the most recent sample.
-        progress_state: dict[str, float | int] = {
-            "_start_time": time.monotonic(),
-            "_last_time": time.monotonic(),
-            "_last_count": 0,
-        }
-
-        # Monkey-patch both save_image and download_image to count
-        # calls and to capture every successful save and every error.
-        # As of v3.4.0, we use ``_save_image_raising`` directly so
-        # the wrapper receives typed ``ImageSaveError`` subclasses
-        # (NetworkError, InvalidImageError, DuplicateImageError,
-        # WriteError) instead of a generic ``False`` return.
-        original_save_raising = engine_obj._save_image_raising
-        original_download = engine_obj.download_image
-
-        def save_with_hooks(link: str, file_path) -> bool:
-            nonlocal save_attempts, min_dimension_skips
-            save_attempts += 1
-            try:
-                # ``_save_image_raising`` returns the MD5 hex digest
-                # of the saved bytes (v3.5.0+). The legacy
-                # ``save_image`` wrapper does not return it; we
-                # rely on the raising variant here.
-                file_md5 = original_save_raising(link, file_path)
-            except BelowMinDimension as exc:
-                # v3.6.0+: a too-small image is an intentional filter
-                # outcome, not a failure — unlike the other
-                # ImageSaveError subclasses below, it does NOT go
-                # into Result.errors or fire on_error. It's recorded
-                # as a manifest "skip" and counted in Result.skipped.
-                min_dimension_skips += 1
-                if manifest_ctx is not None:
-                    _append_manifest_record(
-                        manifest_ctx,
-                        status="skipped",
-                        url=link,
-                        file_path=None,
-                        md5=None,
-                        error=exc,
-                        engine_obj=engine_obj,
-                    )
-                return False
-            except ImageSaveError as exc:
-                # Typed save failure (v3.4.0+). Surface via on_error
-                # and Result.errors.
-                errors.append((link, exc))
-                if self.on_error:
-                    try:
-                        self.on_error(link, exc)
-                    except Exception:
-                        logging.exception("on_error hook raised; continuing")
-                # Manifest append (v3.5.0+): record the typed failure.
-                if manifest_ctx is not None:
-                    _append_manifest_record(
-                        manifest_ctx,
-                        status="error",
-                        url=link,
-                        file_path=None,
-                        md5=None,
-                        error=exc,
-                        engine_obj=engine_obj,
-                    )
-                return False
-            except Exception as exc:
-                # Unhandled exception in save_image (e.g. a bug in
-                # the engine subclass). Surface generically.
-                errors.append((link, exc))
-                if self.on_error:
-                    try:
-                        self.on_error(link, exc)
-                    except Exception:
-                        logging.exception("on_error hook raised; continuing")
-                # Manifest append (v3.5.0+): record the unhandled failure.
-                if manifest_ctx is not None:
-                    _append_manifest_record(
-                        manifest_ctx,
-                        status="error",
-                        url=link,
-                        file_path=None,
-                        md5=None,
-                        error=exc,
-                        engine_obj=engine_obj,
-                    )
-                return False
-            fp = Path(file_path)
-            if fp in seen_paths:
-                return True
-            seen_paths.add(fp)
-            try:
-                size = fp.stat().st_size
-            except OSError:
-                size = 0
-            # Re-detect mime by file extension since we already validated
-            # via filetype during save_image.
-            mime = _guess_mime(fp)
-            ir = ImageResult(
-                path=fp,
-                source_url=link,
-                engine=engine,
-                query=query,
-                image_index=engine_obj.download_count,  # set by save_image
-                size_bytes=size,
-                mime_type=mime,
-                caption=getattr(engine_obj, "captions", {}).get(link),
-            )
-            images.append(ir)
-            if self.on_image:
-                try:
-                    self.on_image(ir)
-                except Exception:
-                    logging.exception("on_image hook raised; continuing")
-            # Fire the on_progress hook (v3.4.0+). The engine's
-            # ``download_count`` is incremented inside
-            # ``download_image`` *after* ``save_image`` returns,
-            # so we add 1 to account for the image we just saved.
-            if self.on_progress:
-                done = engine_obj.download_count + 1
-                total = limit
-                pct = (done / total * 100.0) if total > 0 else 0.0
-                eta = _compute_eta(progress_state, done, total)
-                try:
-                    self.on_progress(pct, done, total, eta)
-                except Exception:
-                    logging.exception("on_progress hook raised; continuing")
-            # Manifest append (v3.5.0+): one record per successful save.
-            if manifest_ctx is not None:
-                _append_manifest_record(
-                    manifest_ctx,
-                    status="ok",
-                    url=link,
-                    file_path=fp,
-                    md5=file_md5,
-                    error=None,
-                    engine_obj=engine_obj,
-                )
-            return True
-
-        # ``save_image`` is defined on the base ``ImageEngine`` class,
-        # so this attribute assignment is legal Python but mypy flags
-        # it. Suppress only the method-assign warning.
-        engine_obj.save_image = save_with_hooks  # type: ignore[method-assign]
-
-        def download_with_count(link: str, index: int):
-            nonlocal download_image_calls
-            download_image_calls += 1
-            return original_download(link, index)
-
-        # Wrap download_image to count how many candidates the engine
-        # considered (including resume-skips).
-        engine_obj.download_image = download_with_count  # type: ignore[method-assign]
+        # All per-run mutable state (result lists, counters) and the
+        # engine hook wiring live in a _SearchSession so this method
+        # stays an orchestration outline: setup -> run -> finish.
+        _fire_hook(self.on_engine_start, engine, query)
+        session = _SearchSession(self, engine_obj, engine, query, limit, manifest_ctx)
+        session.install()
 
         try:
             engine_obj.run()
@@ -642,48 +650,7 @@ class Downloader:
             if manifest_writer is not None:
                 manifest_writer.close()
 
-        # Compute the run's high-level outcome flags.
-        # ``no_results_found`` is True when the engine considered
-        # zero candidate URLs. This distinguishes "the search
-        # returned nothing" from "the search returned stuff but
-        # it was all skipped or failed" — a distinction that was
-        # invisible in 3.2.0 and earlier.
-        no_results_found = download_image_calls == 0
-        cancelled = cancel is not None and cancel.cancelled
-
-        # ``skipped`` is clamped to zero: if a custom engine
-        # incremented ``download_count`` without ``_slots_used`` (or
-        # vice versa), the subtraction can go negative. We don't
-        # want a nonsensical negative count in the result.
-        # ``min_dimension_skips`` (v3.6.0+) is added on top: those
-        # images never touch ``_slots_used``/``download_count`` at
-        # all (the engine just moves on to the next candidate), so
-        # they need to be folded in separately.
-        skipped = max(0, engine_obj._slots_used - engine_obj.download_count) + min_dimension_skips
-
-        result = Result(
-            query=query,
-            engine=engine,
-            output_dir=image_dir,
-            images=images,
-            skipped=skipped,
-            errors=errors,
-            no_results_found=no_results_found,
-            cancelled=cancelled,
-            manifest_path=manifest_abs_path,
-        )
-        # Attach the engine instance to the Result so the legacy
-        # ``downloader()`` function can read ``engine.download_count``
-        # for backwards compatibility.
-        result._engine = engine_obj
-
-        if self.on_engine_done:
-            try:
-                self.on_engine_done(engine, result)
-            except Exception:
-                logging.exception("on_engine_done hook raised; continuing")
-
-        return result
+        return session.build_result(image_dir, manifest_abs_path, cancel)
 
     async def search_async(
         self,
