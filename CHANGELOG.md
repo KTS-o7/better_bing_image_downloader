@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-09-21
+
+### Changed
+
+- **Internal: `search()` refactor, no behavior change.** The 422-line
+  `Downloader.search()` is now an orchestration outline: per-run state
+  lives in a `_SearchSession`, manifest/engine-kwarg setup in small
+  helpers, and engines report saves through an explicit `Collector`
+  protocol instead of monkey-patched `save_image`/`download_image`.
+  Custom engines and `save_image` patches behave exactly as before.
+  Max function complexity 37 → 4.
+
 ## [4.0.0] - 2026-09-20
 
 ### Removed (breaking)

@@ -695,6 +695,14 @@ downloader("mountain landscape", limit=500, output_dir="dataset")
 
 ## Changelog
 
+### 4.0.1 (search refactor)
+
+- **Changed:** internal only, no behavior change — `Downloader.search()` split into a `_SearchSession` plus small helpers; engines report saves via an explicit `Collector` protocol instead of monkey-patching
+
+### 4.0.0 (Selenium removal)
+
+- **Breaking:** deleted `crawler.py`, `multidownloader.py`, `helperdownload.py`, `utils.py`; dropped the `requests` dependency and the `[google]` extra
+
 ### 3.11.0 (Bing license filter)
 
 - **New:** `license` parameter (`any`, `public`, `share`, `share_commercially`, `modify`, `modify_commercially`) on `Bing`, `Downloader.search()`, `downloader()`, and `--license` CLI flag — maps to Bing's `filterui:license-L*` codes, combines with `image_filter` in one `qft`
