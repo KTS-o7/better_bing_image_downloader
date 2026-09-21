@@ -462,26 +462,12 @@ downloader("cats", limit=150, output_dir="dataset")
 downloader("cats", limit=150, output_dir="dataset", engine="duckduckgo")
 ```
 
-### Download manifest (legacy, deprecated)
+### Download manifest (legacy, removed)
 
-> **Deprecated:** `_manifest.json` is deprecated since v3.8.1 and will be
-> removed in v4.0.0. Use the JSONL `manifest.jsonl` export
-> (`manifest=True`, see above) for all new tooling.
-
-The legacy `downloader()` function also writes a `_manifest.json` file to the
-output directory after every run — a v3.1.x format kept for backwards
-compatibility:
-
-```json
-{
-  "Image_1.jpg": "https://example.com/photo1.jpg",
-  "Image_2.png": "https://example.com/photo2.png"
-}
-```
-
-Successive runs merge into the existing manifest. Prefer the JSONL
-`manifest.jsonl` export (see above) for new tooling — it records one
-entry per download attempt, including errors and skips.
+> **Removed in v5.0.0:** the v3.1.x `_manifest.json` file (deprecated
+> since v3.8.1) is no longer written. Use the JSONL `manifest.jsonl`
+> export (`manifest=True`, see above) for all tooling — one record per
+> download attempt, including errors and skips.
 
 ### Backward compatibility
 
@@ -723,7 +709,7 @@ downloader("mountain landscape", limit=500, output_dir="dataset")
 
 ### 3.8.1 (manifest polish)
 
-- **Changed:** legacy `_manifest.json` deprecated (removal in v4.0.0); use JSONL manifest instead
+- **Changed:** legacy `_manifest.json` deprecated (removed in v5.0.0); use JSONL manifest instead
 
 ### 3.8.0 (proxy)
 
