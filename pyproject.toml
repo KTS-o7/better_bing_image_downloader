@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "better-bing-image-downloader"
-version = "4.0.1"
+version = "5.0.0"
 description = "Bulk image downloader from Bing or DuckDuckGo (no browser required)"
 readme = "README.md"
 license = { text = "MIT" }

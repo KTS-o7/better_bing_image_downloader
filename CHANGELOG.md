@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.0.0] - 2026-09-21
+
+### Removed (breaking)
+
+- **Legacy `_manifest.json` deleted** (#100): `downloader()` no longer
+  writes the v3.1.x `_manifest.json` file (deprecated since 3.8.1,
+  announced for v4.0.0). Use the JSONL manifest instead:
+  `downloader(..., manifest=True)` or
+  `Downloader().search(..., manifest=True)` plus `bbid export`.
+
 ## [4.0.1] - 2026-09-21
 
 ### Changed
