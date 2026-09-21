@@ -97,3 +97,15 @@ def _build_mock_engine_cls(num_downloads: int):
 
     mock_instance.run = MagicMock(side_effect=fake_run)
     return mock_cls
+
+
+class TestDownloadBatchHoisted:
+    """_download_batch must live once on the base class (#99)."""
+
+    def test_engines_inherit_batch_from_base(self):
+        from better_bing_image_downloader.base import ImageEngine
+        from better_bing_image_downloader.bing import Bing
+        from better_bing_image_downloader.duckduckgo import DuckDuckGo
+
+        assert Bing._download_batch is ImageEngine._download_batch
+        assert DuckDuckGo._download_batch is ImageEngine._download_batch

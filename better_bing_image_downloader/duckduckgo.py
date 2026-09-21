@@ -36,7 +36,7 @@ except ImportError:  # pragma: no cover
     brotli = None
     _HAS_BROTLI = False
 
-from .base import DEFAULT_VERBOSE, MAX_FUTURE_TIMEOUT, ImageEngine
+from .base import DEFAULT_VERBOSE, ImageEngine
 
 __all__ = ["DuckDuckGo"]
 
@@ -367,30 +367,3 @@ class DuckDuckGo(ImageEngine):
             page_num += 1
 
         logging.info("\n\n[%%] Done. Downloaded %d images.", self.download_count)
-
-    def _download_batch(self, links: list[str], start_index: int) -> None:
-        """Download a batch of links starting at ``start_index``.
-
-        The base class already updates counters inside ``download_image``,
-        so this just dispatches work.
-        """
-        if not links:
-            return
-        if self.max_workers > 1:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = [
-                    executor.submit(self.download_image, link, i)
-                    for i, link in enumerate(links, start_index)
-                ]
-                for future in as_completed(futures, timeout=MAX_FUTURE_TIMEOUT):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        logging.error("Error processing download: %s", e)
-        else:
-            for i, link in enumerate(links, start_index):
-                if self._slots_used >= self.limit:
-                    break
-                self.download_image(link, i)

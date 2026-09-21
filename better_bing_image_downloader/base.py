@@ -17,6 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Protocol
 
@@ -628,3 +629,30 @@ class ImageEngine(ABC):
         except Exception as e:
             logging.error("Issue getting image %s: %s", link, e)
             return None
+
+    def _download_batch(self, links: list[str], start_index: int) -> None:
+        """Download a batch of links starting at ``start_index``.
+
+        Shared fan-out for all engines (hoisted from ``Bing`` /
+        ``DuckDuckGo`` in #99): :meth:`download_image` updates counters
+        itself; this method just dispatches work in parallel or
+        sequentially.
+        """
+        if not links:
+            return
+        if self.max_workers > 1:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = [
+                    executor.submit(self.download_image, link, i)
+                    for i, link in enumerate(links, start_index)
+                ]
+                for future in as_completed(futures, timeout=MAX_FUTURE_TIMEOUT):
+                    try:
+                        future.result()
+                    except Exception as e:
+                        logging.error("Error processing download: %s", e)
+        else:
+            for i, link in enumerate(links, start_index):
+                if self._slots_used >= self.limit:
+                    break
+                self.download_image(link, i)
