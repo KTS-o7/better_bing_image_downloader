@@ -471,10 +471,11 @@ downloader("cats", limit=150, output_dir="dataset", engine="duckduckgo")
 
 ### Backward compatibility
 
-The old `filter=` keyword argument still works but emits a `DeprecationWarning`. Use `image_filter=` going forward:
+The old `filter=` keyword argument was removed in v6.0.0 (deprecated
+since v3.0.0). Use `image_filter=`:
 
 ```python
-# Deprecated (still works):
+# Removed in v6.0.0 (raises TypeError):
 downloader("cats", filter="photo")
 
 # Correct:
@@ -680,6 +681,10 @@ downloader("mountain landscape", limit=500, output_dir="dataset")
 ```
 
 ## Changelog
+
+### 6.0.0 (filter alias removal)
+
+- **Breaking:** `downloader()` no longer accepts `filter=` (deprecated since 3.0.0) — use `image_filter=`. `Bing(filter=...)` is unchanged
 
 ### 5.0.0 (legacy manifest removal)
 

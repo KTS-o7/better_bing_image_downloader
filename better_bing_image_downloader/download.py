@@ -15,7 +15,6 @@ import argparse
 import logging
 import shutil
 import sys
-import warnings
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from pathlib import Path
@@ -50,7 +49,6 @@ def downloader(
     min_dimension: int | None = None,
     proxy: str | None = None,
     license: str = "any",
-    **kwargs,
 ) -> int:
     """Download images matching ``query`` using the chosen search engine.
 
@@ -115,18 +113,6 @@ def downloader(
         Number of images newly downloaded by this call. Does not count
         files that were already on disk from a previous run.
     """
-    # Backward compatibility: accept old 'filter' keyword arg
-    if "filter" in kwargs:
-        warnings.warn(
-            "The 'filter' parameter is deprecated, use 'image_filter' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        image_filter = kwargs.pop("filter")
-
-    if kwargs:
-        raise TypeError(f"Unexpected keyword arguments: {sorted(kwargs)}")
-
     if engine not in ("bing", "duckduckgo"):
         raise ValueError(f"engine must be 'bing' or 'duckduckgo', got {engine!r}")
 
