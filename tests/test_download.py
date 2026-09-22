@@ -120,22 +120,15 @@ def test_downloader_force_replace_deletes_existing_dir():
     assert not os.path.exists(sentinel_file), "force_replace should have deleted existing files"
 
 
-def test_downloader_old_filter_param_works_with_deprecation_warning():
-    """Old 'filter=' kwarg should still work but emit DeprecationWarning"""
-    import warnings
+def test_downloader_old_filter_param_removed():
+    """Old 'filter=' kwarg was removed in v6.0.0: raises TypeError."""
+    import pytest
 
     tmp = tempfile.mkdtemp()
     mock_cls = _build_mock_engine_cls(0)
-    with patch.object(
-        Downloader,
-        "_DEFAULT_REGISTRY",
-        {"bing": mock_cls, "duckduckgo": mock_cls},
-    ):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            downloader("cats", limit=1, output_dir=tmp, filter="photo")
-        assert any(issubclass(x.category, DeprecationWarning) for x in w)
-        assert any("image_filter" in str(x.message) for x in w)
+    registry = {"bing": mock_cls, "duckduckgo": mock_cls}
+    with patch.object(Downloader, "_DEFAULT_REGISTRY", registry), pytest.raises(TypeError):
+        downloader("cats", limit=1, output_dir=tmp, filter="photo")  # type: ignore[call-arg]
 
 
 def test_no_legacy_manifest_written():

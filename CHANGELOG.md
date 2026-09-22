@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-09-22
+
+### Removed (breaking)
+
+- **`filter=` alias deleted**: `downloader()` no longer accepts the
+  old `filter` keyword argument (deprecated since 3.0.0, announced
+  for removal). Use `image_filter=` instead. Note: `Bing(filter=...)`
+  — the engine class's own parameter — is unchanged.
+
 ## [5.0.0] - 2026-09-21
 
 ### Removed (breaking)
