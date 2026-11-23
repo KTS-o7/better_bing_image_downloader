@@ -15,8 +15,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
         include:
+          # Python 3.9 is still supported (requires-python >=3.9), but
+          # setup-python has no 3.9 build for the current ubuntu-latest
+          # image, so test it on ubuntu-22.04.
+          - os: ubuntu-22.04
+            python-version: "3.9"
           # Windows portability gate (#85): the only recurring bug
           # class (#51, #68) is Windows-specific CLI behavior, so one
           # Windows job covers it without 5x-ing the matrix.
